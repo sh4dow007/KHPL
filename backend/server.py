@@ -36,9 +36,12 @@ client = AsyncIOMotorClient(
     mongo_url,
     tls=True,
     tlsAllowInvalidCertificates=True,
-    serverSelectionTimeoutMS=5000,
-    connectTimeoutMS=10000,
-    socketTimeoutMS=20000
+    tlsInsecure=True,
+    serverSelectionTimeoutMS=30000,
+    connectTimeoutMS=30000,
+    socketTimeoutMS=30000,
+    retryWrites=True,
+    retryReads=True
 )
 db = client[os.environ.get('DB_NAME', 'khlp_database')]
 
