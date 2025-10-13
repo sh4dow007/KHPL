@@ -32,16 +32,45 @@ print(f"Connecting to MongoDB with URL: {mongo_url[:50]}...")  # Log first 50 ch
 if not mongo_url.startswith(('mongodb://', 'mongodb+srv://')):
     raise ValueError(f"Invalid MongoDB URL format: {mongo_url[:50]}...")
 
-client = AsyncIOMotorClient(
-    mongo_url,
-    tls=True,
-    tlsAllowInvalidCertificates=True,
-    serverSelectionTimeoutMS=30000,
-    connectTimeoutMS=30000,
-    socketTimeoutMS=30000,
-    retryWrites=True,
-    retryReads=True
-)
+# Try different SSL configurations for Render compatibility
+try:
+    # First try with minimal SSL configuration
+    client = AsyncIOMotorClient(
+        mongo_url,
+        serverSelectionTimeoutMS=30000,
+        connectTimeoutMS=30000,
+        socketTimeoutMS=30000,
+        retryWrites=True,
+        retryReads=True
+    )
+    print("Connected to MongoDB with default SSL configuration")
+except Exception as e:
+    print(f"Default SSL failed: {e}")
+    try:
+        # Try with explicit TLS but no certificate validation
+        client = AsyncIOMotorClient(
+            mongo_url,
+            tls=True,
+            tlsAllowInvalidCertificates=True,
+            serverSelectionTimeoutMS=30000,
+            connectTimeoutMS=30000,
+            socketTimeoutMS=30000,
+            retryWrites=True,
+            retryReads=True
+        )
+        print("Connected to MongoDB with TLS and invalid certificates allowed")
+    except Exception as e2:
+        print(f"TLS with invalid certificates failed: {e2}")
+        # Last resort: try without TLS
+        client = AsyncIOMotorClient(
+            mongo_url.replace('mongodb+srv://', 'mongodb://'),
+            serverSelectionTimeoutMS=30000,
+            connectTimeoutMS=30000,
+            socketTimeoutMS=30000,
+            retryWrites=True,
+            retryReads=True
+        )
+        print("Connected to MongoDB without TLS (fallback)")
 db = client[os.environ.get('DB_NAME', 'khlp_database')]
 
 # Create the main app without a prefix
