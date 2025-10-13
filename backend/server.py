@@ -22,7 +22,15 @@ mongo_url = os.environ.get('MONGO_URL')
 if not mongo_url:
     raise ValueError("MONGO_URL environment variable is not set")
 
+# Fix common environment variable issues
+if mongo_url.startswith('MONGO_URL='):
+    mongo_url = mongo_url.split('=', 1)[1]
+
 print(f"Connecting to MongoDB with URL: {mongo_url[:50]}...")  # Log first 50 chars for debugging
+
+# Validate URL format
+if not mongo_url.startswith(('mongodb://', 'mongodb+srv://')):
+    raise ValueError(f"Invalid MongoDB URL format: {mongo_url[:50]}...")
 
 client = AsyncIOMotorClient(
     mongo_url,
