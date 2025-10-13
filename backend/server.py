@@ -36,7 +36,6 @@ client = AsyncIOMotorClient(
     mongo_url,
     tls=True,
     tlsAllowInvalidCertificates=True,
-    tlsInsecure=True,
     serverSelectionTimeoutMS=30000,
     connectTimeoutMS=30000,
     socketTimeoutMS=30000,
