@@ -1,0 +1,22 @@
+# Production requirements for Fly.io deployment
+# Optimized for production use
+
+# Core FastAPI dependencies
+fastapi==0.110.1
+uvicorn[standard]==0.25.0
+python-multipart==0.0.20
+
+# Database
+motor==3.3.1
+pymongo==4.5.0
+
+# Authentication & Security
+PyJWT==2.10.1
+python-dotenv==1.1.1
+email-validator==2.3.0
+
+# CORS
+starlette==0.37.2
+
+# Production optimizations
+gunicorn==21.2.0
