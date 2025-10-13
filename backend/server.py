@@ -79,6 +79,16 @@ app = FastAPI(title="KHLP System")
 # Create a router with the /api prefix
 api_router = APIRouter(prefix="/api")
 
+# Health check endpoint
+@app.get("/health")
+async def health_check():
+    try:
+        # Test MongoDB connection
+        await client.admin.command('ping')
+        return {"status": "healthy", "mongodb": "connected"}
+    except Exception as e:
+        return {"status": "unhealthy", "mongodb": "disconnected", "error": str(e)}
+
 # Security setup
 security = HTTPBearer()
 SECRET_KEY = os.getenv("JWT_SECRET_KEY", "your-secret-key-change-this-in-production")
@@ -470,7 +480,20 @@ logger = logging.getLogger(__name__)
 
 @app.on_event("startup")
 async def startup_event():
-    await initialize_owner()
+    try:
+        # Test MongoDB connection first
+        await client.admin.command('ping')
+        print("✅ MongoDB connection successful")
+        
+        # Initialize owner
+        await initialize_owner()
+        print("✅ Owner initialization successful")
+        
+    except Exception as e:
+        print(f"❌ Startup error: {e}")
+        # Don't fail the entire app if MongoDB is temporarily unavailable
+        # The app can still start and handle requests
+        pass
 
 @app.on_event("shutdown")
 async def shutdown_db_client():
