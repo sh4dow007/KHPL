@@ -1,0 +1,28 @@
+# Render.com deployment configuration for KHLP Backend
+
+## Environment Variables Required
+
+Set these in your Render dashboard:
+
+```
+MONGO_URL=mongodb+srv://adityakaushal001_db_user:yJvNt1L8VZh6BuYs@cluster0.wvbvwif.mongodb.net/khlp_database?retryWrites=true&w=majority
+DB_NAME=khlp_database
+JWT_SECRET_KEY=your-production-jwt-secret-key-change-this
+OWNER_EMAIL=aditya.kaushal001@gmail.com
+OWNER_PASSWORD=Password@123
+CORS_ORIGINS=https://your-frontend-url.netlify.app
+PORT=10000
+```
+
+## Build Command
+```
+pip install -r requirements.txt
+```
+
+## Start Command
+```
+python -m uvicorn server:app --host 0.0.0.0 --port $PORT
+```
+
+## Python Version
+3.11
