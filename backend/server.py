@@ -18,7 +18,12 @@ ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
 
 # MongoDB connection with SSL configuration
-mongo_url = os.environ['MONGO_URL']
+mongo_url = os.environ.get('MONGO_URL')
+if not mongo_url:
+    raise ValueError("MONGO_URL environment variable is not set")
+
+print(f"Connecting to MongoDB with URL: {mongo_url[:50]}...")  # Log first 50 chars for debugging
+
 client = AsyncIOMotorClient(
     mongo_url,
     tls=True,
@@ -27,7 +32,7 @@ client = AsyncIOMotorClient(
     connectTimeoutMS=10000,
     socketTimeoutMS=20000
 )
-db = client[os.environ['DB_NAME']]
+db = client[os.environ.get('DB_NAME', 'khlp_database')]
 
 # Create the main app without a prefix
 app = FastAPI(title="KHLP System")
