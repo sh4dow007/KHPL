@@ -504,7 +504,7 @@ ${user?.name || 'Team Leader'}`;
               <div className={`w-3 h-3 ${isRoot ? 'bg-white' : 'bg-blue-500'} rounded-full mr-2`}></div>
               <span className="font-semibold text-[11px] sm:text-xs">{node.name}</span>
             </div>
-            <div className="text-[11px] sm:text-xs opacity-80 truncate">{node.email}</div>
+            <div className="text-[11px] sm:text-xs opacity-80 truncate">{node.phone}</div>
             <Badge variant={isRoot ? "secondary" : "outline"} className="mt-1 text-[10px] sm:text-xs px-2 py-0">
               L{node.level}
             </Badge>
@@ -747,7 +747,7 @@ ${user?.name || 'Team Leader'}`;
                         <div className="flex justify-between items-start">
                           <div>
                             <CardTitle className="text-lg font-semibold text-gray-900">{member.name}</CardTitle>
-                            <CardDescription className="text-gray-600">{member.email}</CardDescription>
+                            <CardDescription className="text-gray-600">{member.phone}</CardDescription>
                           </div>
                           <Badge className="bg-blue-100 text-blue-800">Level {member.level}</Badge>
                         </div>

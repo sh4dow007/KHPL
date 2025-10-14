@@ -474,7 +474,7 @@ async def get_team_tree(current_user: dict = Depends(get_current_user)):
         tree_node = {
             "id": user["id"],
             "name": user["name"],
-            "email": user["email"],
+            "phone": user["phone"],
             "level": user["level"],
             "children_count": len(children),
             "children": []
