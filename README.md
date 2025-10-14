@@ -49,23 +49,34 @@ A modern team management application built with React and FastAPI.
    cd KHPL
    ```
 
-2. **Backend Setup**
+2. **Setup Admin Credentials**
+   ```bash
+   python3 setup_admin.py
+   ```
+   This interactive script will help you set up admin credentials and environment variables.
+
+3. **Backend Setup**
    ```bash
    cd backend
    pip install -r requirements.txt
-   cp .env.example .env
-   # Update .env with your MongoDB connection string
-   uvicorn server:app --reload
+   # .env file is created by setup_admin.py
+   python -m uvicorn server:app --reload
    ```
 
-3. **Frontend Setup**
+4. **Frontend Setup**
    ```bash
    cd frontend
    yarn install
-   cp .env.example .env.local
-   # Update .env.local with your backend URL
    yarn start
    ```
+
+### Admin Login
+
+After running the setup script, you can login with:
+- **Phone Number**: The phone number you provided during setup
+- **Password**: The password you provided during setup
+
+**Note**: The system uses phone numbers for login, not email addresses.
 
 ### Production Deployment
 

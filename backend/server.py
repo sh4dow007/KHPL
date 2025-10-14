@@ -7,13 +7,24 @@ import os
 import logging
 from pathlib import Path
 import certifi
-from pydantic import BaseModel, Field, EmailStr
+from pydantic import BaseModel, Field, EmailStr, validator
 from typing import List, Optional, Dict, Any
 import uuid
 from datetime import datetime, timedelta, timezone
 import jwt
 import hashlib
 import secrets
+from passlib.context import CryptContext
+
+# Password hashing
+pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+
+# Configure logging for production
+logging.basicConfig(
+    level=logging.INFO if os.getenv("ENVIRONMENT") == "production" else logging.DEBUG,
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+)
+logger = logging.getLogger(__name__)
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
@@ -48,7 +59,14 @@ print("Connected to MongoDB with TLS using certifi CA bundle")
 db = client[os.environ.get('DB_NAME', 'khlp_database')]
 
 # Create the main app without a prefix
-app = FastAPI(title="KHLP System")
+# Create FastAPI app
+app = FastAPI(
+    title="KHPL System",
+    description="Team Management System with Hierarchical Structure",
+    version="1.0.0",
+    docs_url="/docs" if os.getenv("ENVIRONMENT") == "development" else None,
+    redoc_url="/redoc" if os.getenv("ENVIRONMENT") == "development" else None
+)
 
 # Create a router with the /api prefix
 api_router = APIRouter(prefix="/api")
@@ -99,7 +117,7 @@ class User(UserBase):
     invited_by: Optional[str] = None
 
 class UserLogin(BaseModel):
-    email: EmailStr
+    phone: str  # Change from email to phone
     password: str
 
 class UserResponse(BaseModel):
@@ -126,16 +144,29 @@ class Invitation(BaseModel):
     expires_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc) + timedelta(days=7))
 
 class InviteUser(BaseModel):
-    email: EmailStr
     name: str
+    email: Optional[EmailStr] = None  # Optional for WhatsApp invitations
 
 class RegisterFromInvitation(BaseModel):
     token: str
     password: str
     name: str
-    phone: Optional[str] = None
+    phone: str  # Make phone mandatory for login
+    email: Optional[EmailStr] = None  # Make email optional
     address: Optional[str] = None
     aadhaar_id: str
+    
+    @validator('email', pre=True)
+    def validate_email(cls, v):
+        if v == "" or v is None:
+            return None
+        return v
+    
+    @validator('address', pre=True)
+    def validate_address(cls, v):
+        if v == "" or v is None:
+            return None
+        return v
 
 class Token(BaseModel):
     access_token: str
@@ -144,10 +175,20 @@ class Token(BaseModel):
 
 # Utility functions
 def verify_password(plain_password: str, hashed_password: str) -> bool:
-    return get_password_hash(plain_password) == hashed_password
+    try:
+        # Try bcrypt first (new format)
+        if hashed_password.startswith('$2b$'):
+            return pwd_context.verify(plain_password, hashed_password)
+        else:
+            # Fallback to SHA256 for old hashes (backward compatibility)
+            import hashlib
+            return hashlib.sha256(plain_password.encode()).hexdigest() == hashed_password
+    except Exception as e:
+        logger.error(f"Password verification error: {e}")
+        return False
 
 def get_password_hash(password: str) -> str:
-    return hashlib.sha256(password.encode()).hexdigest()
+    return pwd_context.hash(password)
 
 def create_access_token(data: dict, expires_delta: Optional[timedelta] = None):
     to_encode = data.copy()
@@ -178,10 +219,15 @@ async def get_user_children_count(user_id: str) -> int:
     return count
 
 async def prepare_user_response(user_doc: dict) -> UserResponse:
-    children_count = await get_user_children_count(user_doc["id"])
+    # Calculate current children count
+    current_children_count = await get_user_children_count(user_doc["id"])
+    
+    # Remove the old children_count from user_doc to avoid conflict
+    user_data = {k: v for k, v in user_doc.items() if k != "children_count"}
+    
     return UserResponse(
-        **user_doc,
-        children_count=children_count
+        **user_data,
+        children_count=current_children_count
     )
 
 # Initialize owner if not exists
@@ -194,7 +240,7 @@ async def initialize_owner():
             "name": "Rakesh Ranjan Mishra",
             "email": os.getenv("OWNER_EMAIL", "owner@mlmapp.com"),
             "password_hash": get_password_hash(os.getenv("OWNER_PASSWORD", "defaultpassword123")),
-            "phone": None,
+            "phone": os.getenv("OWNER_PHONE", "+91-9876543210"),
             "address": None,
             "aadhaar_id": None,
             "parent_id": None,
@@ -205,27 +251,54 @@ async def initialize_owner():
             "invited_by": None
         }
         await db.users.insert_one(owner_data)
-        print(f"Default owner created: {owner_data['email']}")
+        print(f"Default owner created: {owner_data['email']} | Phone: {owner_data['phone']}")
 
 # Routes
 @api_router.post("/auth/login", response_model=Token)
 async def login(user_credentials: UserLogin):
-    user = await db.users.find_one({"email": user_credentials.email})
-    if not user or not verify_password(user_credentials.password, user["password_hash"]):
-        raise HTTPException(status_code=401, detail="Incorrect email or password")
-    
-    access_token_expires = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
-    access_token = create_access_token(
-        data={"sub": user["id"]}, expires_delta=access_token_expires
-    )
-    
-    user_response = await prepare_user_response(user)
-    
-    return Token(
-        access_token=access_token,
-        token_type="bearer",
-        user=user_response
-    )
+    try:
+        # Find user by phone number
+        user = await db.users.find_one({"phone": user_credentials.phone})
+        
+        if not user:
+            logger.warning(f"Login attempt with non-existent phone: {user_credentials.phone}")
+            raise HTTPException(
+                status_code=401, 
+                detail="Invalid credentials. Please check your phone number and password."
+            )
+        
+        # Verify password
+        if not verify_password(user_credentials.password, user["password_hash"]):
+            logger.warning(f"Failed login attempt for user: {user['name']} (Phone: {user_credentials.phone})")
+            raise HTTPException(
+                status_code=401, 
+                detail="Invalid credentials. Please check your phone number and password."
+            )
+        
+        # Generate access token
+        access_token_expires = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
+        access_token = create_access_token(
+            data={"sub": user["id"]}, expires_delta=access_token_expires
+        )
+        
+        user_response = await prepare_user_response(user)
+        logger.info(f"Successful login for user: {user['name']} (Phone: {user_credentials.phone})")
+        
+        return Token(
+            access_token=access_token,
+            token_type="bearer",
+            user=user_response
+        )
+        
+    except HTTPException:
+        # Re-raise HTTP exceptions (like 401)
+        raise
+    except Exception as e:
+        logger.error(f"Login error: {e}")
+        raise HTTPException(
+            status_code=500, 
+            detail="An error occurred during login. Please try again."
+        )
 
 @api_router.get("/auth/me", response_model=UserResponse)
 async def get_current_user_info(current_user: dict = Depends(get_current_user)):
@@ -233,18 +306,25 @@ async def get_current_user_info(current_user: dict = Depends(get_current_user)):
 
 @api_router.post("/invite", response_model=dict)
 async def invite_user(invite_data: InviteUser, current_user: dict = Depends(get_current_user)):
-    # Check if user already exists
-    existing_user = await db.users.find_one({"email": invite_data.email})
-    if existing_user:
-        raise HTTPException(status_code=400, detail="User with this email already exists")
+    # Generate a unique email for WhatsApp invitations if not provided
+    user_email = invite_data.email
+    if not user_email:
+        # Create a unique identifier for WhatsApp invitations
+        user_email = f"whatsapp-{secrets.token_urlsafe(8)}@example.com"
     
-    # Check if invitation already exists and is pending
-    existing_invitation = await db.invitations.find_one({
-        "email": invite_data.email, 
-        "status": "pending"
-    })
-    if existing_invitation:
-        raise HTTPException(status_code=400, detail="Invitation already sent to this email")
+    # Check if user already exists (only if email is provided)
+    if user_email and not user_email.startswith("whatsapp-"):
+        existing_user = await db.users.find_one({"email": user_email})
+        if existing_user:
+            raise HTTPException(status_code=400, detail="User with this email already exists")
+        
+        # Check if invitation already exists and is pending
+        existing_invitation = await db.invitations.find_one({
+            "email": user_email, 
+            "status": "pending"
+        })
+        if existing_invitation:
+            raise HTTPException(status_code=400, detail="Invitation already sent to this email")
     
     # Check team member limit (maximum 2 direct children)
     current_children_count = await db.users.count_documents({"parent_id": current_user["id"]})
@@ -253,18 +333,18 @@ async def invite_user(invite_data: InviteUser, current_user: dict = Depends(get_
     
     # Create invitation
     invitation = Invitation(
-        email=invite_data.email,
+        email=user_email,
         invited_by=current_user["id"]
     )
     
     await db.invitations.insert_one(invitation.dict())
     
-    # Here you would normally send an email with the invitation token
-    # For now, we'll return the token for testing purposes
+    # Return the invitation details for WhatsApp sharing
     return {
-        "message": "Invitation sent successfully",
+        "message": "Invitation created successfully",
         "invitation_token": invitation.token,
-        "invite_link": f"/register?token={invitation.token}"
+        "invite_link": f"/register?token={invitation.token}",
+        "member_name": invite_data.name
     }
 
 @api_router.get("/invitation/{token}")
@@ -314,10 +394,13 @@ async def register_from_invitation(registration_data: RegisterFromInvitation):
     if expires_at < datetime.now(timezone.utc):
         raise HTTPException(status_code=400, detail="Invitation has expired")
     
-    # Check if user already exists
-    existing_user = await db.users.find_one({"email": invitation["email"]})
+    # Use the phone number provided during registration for login
+    user_phone = registration_data.phone
+    
+    # Check if user already exists (by phone number)
+    existing_user = await db.users.find_one({"phone": user_phone})
     if existing_user:
-        raise HTTPException(status_code=400, detail="User already registered")
+        raise HTTPException(status_code=400, detail="User with this phone number already registered")
     
     # Get parent user to determine level
     parent_user = await db.users.find_one({"id": invitation["invited_by"]})
@@ -328,7 +411,7 @@ async def register_from_invitation(registration_data: RegisterFromInvitation):
     new_user = {
         "id": str(uuid.uuid4()),
         "name": registration_data.name,
-        "email": invitation["email"],
+        "email": registration_data.email or invitation["email"],  # Use provided email or placeholder
         "password_hash": get_password_hash(registration_data.password),
         "phone": registration_data.phone,
         "address": registration_data.address,

@@ -60,19 +60,31 @@ const AuthProvider = ({ children }) => {
     }
   };
 
-  const login = async (email, password) => {
+  const login = async (phone, password) => {
     try {
-      const response = await axios.post(`${API}/auth/login`, { email, password });
+      const response = await axios.post(`${API}/auth/login`, { phone, password });
       const { access_token, user: userData } = response.data;
       
       localStorage.setItem('token', access_token);
       axios.defaults.headers.common['Authorization'] = `Bearer ${access_token}`;
       setUser(userData);
       
-      toast.success('Login successful!');
+      toast.success(`Welcome back, ${userData.name}!`);
       return true;
     } catch (error) {
-      toast.error(error.response?.data?.detail || 'Login failed');
+      let errorMessage = 'Login failed. Please try again.';
+      
+      if (error.response?.status === 401) {
+        errorMessage = 'Invalid credentials. Please check your phone number and password.';
+      } else if (error.response?.status === 500) {
+        errorMessage = 'Server error. Please try again later.';
+      } else if (error.response?.data?.detail) {
+        errorMessage = error.response.data.detail;
+      } else if (error.message) {
+        errorMessage = error.message;
+      }
+      
+      toast.error(errorMessage);
       return false;
     }
   };
@@ -92,17 +104,20 @@ const AuthProvider = ({ children }) => {
 };
 
 const Login = () => {
-  const [email, setEmail] = useState('');
+  const [phone, setPhone] = useState('');
   const [password, setPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState('');
   const { login } = useAuth();
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     setIsLoading(true);
-    const success = await login(email, password);
-    if (success) {
-      // Navigation will be handled by the auth state change
+    setError(''); // Clear previous errors
+    
+    const success = await login(phone, password);
+    if (!success) {
+      setError('Invalid credentials. Please check your phone number and password.');
     }
     setIsLoading(false);
   };
@@ -122,16 +137,32 @@ const Login = () => {
           </CardHeader>
           <CardContent>
             <form onSubmit={handleSubmit} className="space-y-4">
+              {error && (
+                <div className="bg-red-50 border border-red-200 rounded-md p-3">
+                  <div className="flex">
+                    <div className="flex-shrink-0">
+                      <svg className="h-5 w-5 text-red-400" viewBox="0 0 20 20" fill="currentColor">
+                        <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
+                      </svg>
+                    </div>
+                    <div className="ml-3">
+                      <p className="text-sm text-red-800">{error}</p>
+                    </div>
+                  </div>
+                </div>
+              )}
+              
               <div className="space-y-2">
-                <Label htmlFor="email">Email</Label>
+                <Label htmlFor="phone">Phone Number</Label>
                 <Input
-                  id="email"
-                  type="email"
-                  placeholder="Enter your email"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
+                  id="phone"
+                  type="tel"
+                  placeholder="Enter your phone number"
+                  value={phone}
+                  onChange={(e) => setPhone(e.target.value)}
                   required
-                  data-testid="login-email-input"
+                  data-testid="login-phone-input"
+                  className={error ? "border-red-300 focus:border-red-500" : ""}
                 />
               </div>
               
@@ -145,6 +176,7 @@ const Login = () => {
                   onChange={(e) => setPassword(e.target.value)}
                   required
                   data-testid="login-password-input"
+                  className={error ? "border-red-300 focus:border-red-500" : ""}
                 />
               </div>
 
@@ -169,6 +201,7 @@ const RegisterFromInvitation = () => {
   const [token, setToken] = useState('');
   const [formData, setFormData] = useState({
     name: '',
+    email: '',
     password: '',
     phone: '',
     address: '',
@@ -200,10 +233,18 @@ const RegisterFromInvitation = () => {
     setIsLoading(true);
     
     try {
-      const response = await axios.post(`${API}/auth/register`, {
+      // Prepare registration data, handling empty email
+      const registrationData = {
         token,
-        ...formData
-      });
+        name: formData.name,
+        phone: formData.phone,
+        password: formData.password,
+        address: formData.address || null,
+        aadhaar_id: formData.aadhaar_id,
+        email: formData.email.trim() || null  // Convert empty string to null
+      };
+      
+      const response = await axios.post(`${API}/auth/register`, registrationData);
       
       const { access_token } = response.data;
       localStorage.setItem('token', access_token);
@@ -212,7 +253,8 @@ const RegisterFromInvitation = () => {
       toast.success('Registration successful!');
       window.location.href = '/dashboard';
     } catch (error) {
-      toast.error(error.response?.data?.detail || 'Registration failed');
+      const errorMessage = error.response?.data?.detail || error.message || 'Registration failed';
+      toast.error(typeof errorMessage === 'string' ? errorMessage : 'Registration failed');
     } finally {
       setIsLoading(false);
     }
@@ -245,7 +287,7 @@ const RegisterFromInvitation = () => {
           <CardContent>
             <form onSubmit={handleSubmit} className="space-y-4">
               <div className="space-y-2">
-                <Label htmlFor="name">Full Name</Label>
+                <Label htmlFor="name">Full Name *</Label>
                 <Input
                   id="name"
                   placeholder="Enter your full name"
@@ -255,9 +297,36 @@ const RegisterFromInvitation = () => {
                   data-testid="register-name-input"
                 />
               </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="phone">Phone Number *</Label>
+                <Input
+                  id="phone"
+                  type="tel"
+                  placeholder="Enter your phone number"
+                  value={formData.phone}
+                  onChange={(e) => setFormData({...formData, phone: e.target.value})}
+                  required
+                  data-testid="register-phone-input"
+                />
+                <p className="text-xs text-gray-500">This will be used for login</p>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="email">Email Address (Optional)</Label>
+                <Input
+                  id="email"
+                  type="email"
+                  placeholder="Enter your email address"
+                  value={formData.email}
+                  onChange={(e) => setFormData({...formData, email: e.target.value})}
+                  data-testid="register-email-input"
+                />
+                <p className="text-xs text-gray-500">Optional - for notifications only</p>
+              </div>
               
               <div className="space-y-2">
-                <Label htmlFor="password">Password</Label>
+                <Label htmlFor="password">Password *</Label>
                 <Input
                   id="password"
                   type="password"
@@ -269,16 +338,6 @@ const RegisterFromInvitation = () => {
                 />
               </div>
 
-              <div className="space-y-2">
-                <Label htmlFor="phone">Phone Number (Optional)</Label>
-                <Input
-                  id="phone"
-                  placeholder="Enter your phone number"
-                  value={formData.phone}
-                  onChange={(e) => setFormData({...formData, phone: e.target.value})}
-                  data-testid="register-phone-input"
-                />
-              </div>
 
               <div className="space-y-2">
                 <Label htmlFor="address">Address (Optional)</Label>
@@ -330,9 +389,11 @@ const Dashboard = () => {
   const [myTeam, setMyTeam] = useState([]);
   const [teamTree, setTeamTree] = useState(null);
   const [showInviteDialog, setShowInviteDialog] = useState(false);
-  const [inviteData, setInviteData] = useState({ email: '', name: '' });
+  const [inviteData, setInviteData] = useState({ name: '' });
   const [isLoading, setIsLoading] = useState(false);
   const [activeTab, setActiveTab] = useState('tree');
+  const [showWhatsAppShare, setShowWhatsAppShare] = useState(false);
+  const [inviteMessage, setInviteMessage] = useState('');
 
   useEffect(() => {
     fetchStats();
@@ -346,6 +407,7 @@ const Dashboard = () => {
       setStats(response.data);
     } catch (error) {
       console.error('Failed to fetch stats:', error);
+      setStats({ total_downline: 0, level: 0 }); // Set default values
     }
   };
 
@@ -355,6 +417,7 @@ const Dashboard = () => {
       setMyTeam(response.data);
     } catch (error) {
       console.error('Failed to fetch team:', error);
+      setMyTeam([]); // Set default empty array
     }
   };
 
@@ -364,6 +427,7 @@ const Dashboard = () => {
       setTeamTree(response.data);
     } catch (error) {
       console.error('Failed to fetch team tree:', error);
+      setTeamTree(null); // Set default null
     }
   };
 
@@ -371,17 +435,45 @@ const Dashboard = () => {
     setIsLoading(true);
     try {
       const response = await axios.post(`${API}/invite`, inviteData);
-      toast.success('Invitation sent successfully!');
+      toast.success('Invitation created successfully!');
       
-      // Show the invite link to the user for now (in production, this would be sent via email)
-      toast.success(`Invite Link: ${window.location.origin}/register?token=${response.data.invitation_token}`);
+      // Store invitation details for WhatsApp sharing
+      const inviteLink = `${window.location.origin}/register?token=${response.data.invitation_token}`;
+      const message = `🎉 You're invited to join KHPL Team!
+
+Hi ${inviteData.name},
+
+You've been invited to join our team on our platform. Click the link below to create your account:
+
+${inviteLink}
+
+📋 Required fields for registration:
+• Full Name
+• Phone Number (used for login)
+• Password
+• 12-digit Aadhaar ID
+
+📧 Email address is optional.
+
+This invitation expires in 7 days.
+
+Best regards,
+${user?.name || 'Team Leader'}`;
+
+      // Copy to clipboard
+      navigator.clipboard.writeText(message);
       
+      // Show WhatsApp share dialog
+      setInviteMessage(message);
+      setShowWhatsAppShare(true);
       setShowInviteDialog(false);
-      setInviteData({ email: '', name: '' });
+      setInviteData({ name: '' });
+      
       fetchStats();
       fetchMyTeam();
     } catch (error) {
-      toast.error(error.response?.data?.detail || 'Failed to send invitation');
+      const errorMessage = error.response?.data?.detail || error.message || 'Failed to create invitation';
+      toast.error(typeof errorMessage === 'string' ? errorMessage : 'Failed to create invitation');
     } finally {
       setIsLoading(false);
     }
@@ -543,23 +635,73 @@ const Dashboard = () => {
             </DialogTrigger>
             <DialogContent className="sm:max-w-md">
               <DialogHeader>
-                <DialogTitle className="text-lg sm:text-xl font-semibold">Invite New Team Member</DialogTitle>
+                <DialogTitle className="text-lg sm:text-xl font-semibold">📱 Create WhatsApp Invitation</DialogTitle>
                 <DialogDescription className="text-sm sm:text-base text-gray-600">
-                  Send an invitation to add someone to your team. You can invite up to 2 direct members.
+                  Create an invitation link to share via WhatsApp. You can invite up to 2 direct members.
                 </DialogDescription>
               </DialogHeader>
               <div className="space-y-4">
                 <div className="space-y-2">
-                  <Label htmlFor="invite-name" className="text-sm font-medium">Full Name</Label>
+                  <Label htmlFor="invite-name" className="text-sm font-medium">Team Member Name</Label>
                   <Input id="invite-name" placeholder="Enter their full name" value={inviteData.name} onChange={(e) => setInviteData({...inviteData, name: e.target.value})} data-testid="invite-name-input" className="h-10 sm:h-11" />
                 </div>
-                <div className="space-y-2">
-                  <Label htmlFor="invite-email" className="text-sm font-medium">Email Address</Label>
-                  <Input id="invite-email" type="email" placeholder="Enter their email address" value={inviteData.email} onChange={(e) => setInviteData({...inviteData, email: e.target.value})} data-testid="invite-email-input" className="h-10 sm:h-11" />
+                <div className="bg-blue-50 p-3 rounded-lg">
+                  <p className="text-sm text-blue-800">
+                    💡 <strong>How it works:</strong> We'll create a personalized invitation link that you can share via WhatsApp or any messaging app. The recipient will need to provide their name, phone number (for login), password, and 12-digit Aadhaar ID. Email is optional.
+                  </p>
                 </div>
-                <Button onClick={handleInvite} className="w-full h-10 sm:h-11 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700" disabled={isLoading || !inviteData.email || !inviteData.name} data-testid="send-invitation-button">
-                  {isLoading ? 'Sending Invitation...' : 'Send Invitation'}
+                <Button onClick={handleInvite} className="w-full h-10 sm:h-11 bg-gradient-to-r from-green-600 to-blue-600 hover:from-green-700 hover:to-blue-700" disabled={isLoading || !inviteData.name} data-testid="send-invitation-button">
+                  {isLoading ? 'Creating Invitation...' : '📱 Create WhatsApp Invitation'}
                 </Button>
+              </div>
+            </DialogContent>
+          </Dialog>
+
+          {/* WhatsApp Share Dialog */}
+          <Dialog open={showWhatsAppShare} onOpenChange={setShowWhatsAppShare}>
+            <DialogContent className="sm:max-w-md">
+              <DialogHeader>
+                <DialogTitle className="text-center">📱 Share Invitation</DialogTitle>
+                <DialogDescription className="text-center">
+                  Your invitation has been created! Choose how to share it:
+                </DialogDescription>
+              </DialogHeader>
+              <div className="space-y-4">
+                <div className="bg-gray-50 p-3 rounded-lg">
+                  <p className="text-sm text-gray-600 mb-2">Message copied to clipboard:</p>
+                  <p className="text-xs text-gray-800 whitespace-pre-wrap">{inviteMessage}</p>
+                </div>
+                
+                <div className="flex flex-col gap-3">
+                  <Button 
+                    onClick={() => {
+                      const whatsappUrl = `https://wa.me/?text=${encodeURIComponent(inviteMessage)}`;
+                      window.open(whatsappUrl, '_blank');
+                      setShowWhatsAppShare(false);
+                    }}
+                    className="bg-green-600 hover:bg-green-700 text-white"
+                  >
+                    📱 Share on WhatsApp
+                  </Button>
+                  
+                  <Button 
+                    onClick={() => {
+                      navigator.clipboard.writeText(inviteMessage);
+                      toast.success('Message copied to clipboard!');
+                      setShowWhatsAppShare(false);
+                    }}
+                    variant="outline"
+                  >
+                    📋 Copy Message Again
+                  </Button>
+                  
+                  <Button 
+                    onClick={() => setShowWhatsAppShare(false)}
+                    variant="ghost"
+                  >
+                    ✕ Close
+                  </Button>
+                </div>
               </div>
             </DialogContent>
           </Dialog>
