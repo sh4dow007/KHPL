@@ -522,6 +522,49 @@ async def get_user_stats(current_user: dict = Depends(get_current_user)):
         "is_owner": current_user.get("is_owner", False)
     }
 
+@api_router.delete("/user/{user_id}")
+async def delete_user(user_id: str, current_user: dict = Depends(get_current_user)):
+    """Delete a user and all their descendants. Only owner can delete users."""
+    
+    # Only owner can delete users
+    if not current_user.get("is_owner", False):
+        raise HTTPException(
+            status_code=403,
+            detail="Only the owner can delete users"
+        )
+    
+    # Check if user exists
+    user_to_delete = await db.users.find_one({"id": user_id})
+    if not user_to_delete:
+        raise HTTPException(
+            status_code=404,
+            detail="User not found"
+        )
+    
+    # Prevent owner from deleting themselves
+    if user_to_delete.get("is_owner", False):
+        raise HTTPException(
+            status_code=400,
+            detail="Cannot delete the owner account"
+        )
+    
+    # Recursively delete user and all descendants
+    async def delete_user_and_descendants(user_id: str):
+        # Get all children
+        children = await db.users.find({"parent_id": user_id}).to_list(None)
+        
+        # Recursively delete children first
+        for child in children:
+            await delete_user_and_descendants(child["id"])
+        
+        # Delete the user
+        await db.users.delete_one({"id": user_id})
+        print(f"Deleted user: {user_to_delete.get('name', 'Unknown')} (ID: {user_id})")
+    
+    await delete_user_and_descendants(user_id)
+    
+    return {"message": f"User {user_to_delete.get('name', 'Unknown')} and all descendants deleted successfully"}
+
 # Include the router in the main app
 app.include_router(api_router)
 
