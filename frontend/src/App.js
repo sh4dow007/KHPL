@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import axios from 'axios';
 import logo from './assets/logo.png';
+import InstallPrompt from './components/InstallPrompt';
 import './App.css';
 
 // Import Shadcn components
@@ -840,6 +841,9 @@ ${user?.name || 'Team Leader'}`;
         </Tabs>
 
       </div>
+      
+      {/* PWA Install Prompt */}
+      <InstallPrompt />
     </div>
   );
 };

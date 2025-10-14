@@ -1,4 +1,4 @@
-# KHLP - Team Management System
+# KHPL - Team Management System
 
 A modern team management application built with React and FastAPI.
 

@@ -1,4 +1,4 @@
-# KHLP Deployment Guide - Render.com + Netlify
+# KHPL Deployment Guide - Render.com + Netlify
 
 ## 🚀 Complete Deployment Guide
 
@@ -136,4 +136,4 @@ CORS_ORIGINS=https://your-site-name.netlify.app
 
 ## 🎉 Success!
 
-Your KHLP application is now live in production! 🚀
+Your KHPL application is now live in production! 🚀
