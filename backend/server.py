@@ -6,6 +6,7 @@ from motor.motor_asyncio import AsyncIOMotorClient
 import os
 import logging
 from pathlib import Path
+import certifi
 from pydantic import BaseModel, Field, EmailStr
 from typing import List, Optional, Dict, Any
 import uuid
@@ -32,23 +33,18 @@ print(f"Connecting to MongoDB with URL: {mongo_url[:50]}...")  # Log first 50 ch
 if not mongo_url.startswith(('mongodb://', 'mongodb+srv://')):
     raise ValueError(f"Invalid MongoDB URL format: {mongo_url[:50]}...")
 
-# Use non-SSL connection for Render compatibility
-# Convert mongodb+srv:// to mongodb:// and use standard port
-non_ssl_url = mongo_url.replace('mongodb+srv://', 'mongodb://')
-# Replace cluster hostname with individual shard hosts for non-SSL
-non_ssl_url = non_ssl_url.replace('cluster0.wvbvwif.mongodb.net', 'ac-eppypzh-shard-00-00.wvbvwif.mongodb.net:27017,ac-eppypzh-shard-00-01.wvbvwif.mongodb.net:27017,ac-eppypzh-shard-00-02.wvbvwif.mongodb.net:27017')
-
-print(f"Using non-SSL MongoDB URL: {non_ssl_url[:50]}...")
-
+# Use TLS with CA bundle for Atlas compatibility
 client = AsyncIOMotorClient(
-    non_ssl_url,
+    mongo_url,
+    tls=True,
+    tlsCAFile=certifi.where(),
     serverSelectionTimeoutMS=30000,
     connectTimeoutMS=30000,
     socketTimeoutMS=30000,
     retryWrites=True,
     retryReads=True
 )
-print("Connected to MongoDB without SSL")
+print("Connected to MongoDB with TLS using certifi CA bundle")
 db = client[os.environ.get('DB_NAME', 'khlp_database')]
 
 # Create the main app without a prefix
