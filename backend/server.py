@@ -63,6 +63,11 @@ async def health_check():
     except Exception as e:
         return {"status": "unhealthy", "mongodb": "disconnected", "error": str(e)}
 
+# Lightweight API ping (does not touch DB)
+@api_router.get("/ping")
+async def api_ping():
+    return {"ok": True}
+
 # Security setup
 security = HTTPBearer()
 SECRET_KEY = os.getenv("JWT_SECRET_KEY", "your-secret-key-change-this-in-production")
