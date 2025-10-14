@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import axios from 'axios';
+import logo from './assets/logo.png';
 import './App.css';
 
 // Import Shadcn components
@@ -110,10 +111,8 @@ const Login = () => {
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 flex items-center justify-center p-4">
       <div className="w-full max-w-md space-y-8">
         <div className="text-center">
-          <h1 className="text-3xl sm:text-4xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
-            KHLP
-          </h1>
-          <p className="text-sm sm:text-base text-gray-600 mt-2">Sign in to your account</p>
+          <img src={logo} alt="KHPL" className="mx-auto h-28 sm:h-36 w-auto" />
+          <p className="text-sm sm:text-base text-gray-600 mt-3">Sign in to your account</p>
         </div>
 
         <Card className="shadow-xl border-0 bg-white/70 backdrop-blur-sm">
@@ -454,15 +453,30 @@ const Dashboard = () => {
     <div className="min-h-screen bg-gray-50">
       {/* Header */}
       <div className="bg-white shadow-sm border-b">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between items-center py-3">
-            <div className="flex items-center space-x-4">
-              <h1 className="text-xl sm:text-2xl font-bold text-gray-900">KHLP Dashboard</h1>
-              {user?.is_owner && <Badge className="bg-yellow-100 text-yellow-800">Owner</Badge>}
+        <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8">
+          <div className="py-2 sm:py-3 flex items-center justify-between">
+            {/* Left: Logo + Owner badge */}
+            <div className="flex items-center gap-2 sm:gap-3 min-w-0 flex-shrink-0">
+              <img src={logo} alt="KHPL" className="h-10 sm:h-16 w-auto flex-shrink-0" />
+              {user?.is_owner && (
+                <Badge className="bg-yellow-100 text-yellow-800 text-xs sm:text-sm whitespace-nowrap">Owner</Badge>
+              )}
             </div>
-            <div className="flex items-center space-x-4">
-              <span className="text-xs sm:text-sm text-gray-600">Welcome, {user?.name}</span>
-              <Button variant="outline" className="h-9 px-3" onClick={logout} data-testid="logout-button">
+
+            {/* Right: Welcome + Logout */}
+            <div className="flex items-center gap-2 sm:gap-4 min-w-0">
+              <span className="text-xs sm:text-base text-gray-700 truncate hidden sm:inline">
+                Welcome, {user?.name}
+              </span>
+              <span className="text-xs text-gray-700 truncate sm:hidden">
+                {user?.name}
+              </span>
+              <Button
+                variant="outline"
+                className="h-8 sm:h-10 px-2 sm:px-4 text-xs sm:text-sm flex-shrink-0"
+                onClick={logout}
+                data-testid="logout-button"
+              >
                 Logout
               </Button>
             </div>
