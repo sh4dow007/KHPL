@@ -110,16 +110,16 @@ const Login = () => {
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 flex items-center justify-center p-4">
       <div className="w-full max-w-md space-y-8">
         <div className="text-center">
-          <h1 className="text-4xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
+          <h1 className="text-3xl sm:text-4xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
             KHLP
           </h1>
-          <p className="text-gray-600 mt-2">Sign in to your account</p>
+          <p className="text-sm sm:text-base text-gray-600 mt-2">Sign in to your account</p>
         </div>
 
         <Card className="shadow-xl border-0 bg-white/70 backdrop-blur-sm">
           <CardHeader>
-            <CardTitle>Welcome Back</CardTitle>
-            <CardDescription>Enter your credentials to access your dashboard</CardDescription>
+            <CardTitle className="text-lg sm:text-xl">Welcome Back</CardTitle>
+            <CardDescription className="text-sm sm:text-base">Enter your credentials to access your dashboard</CardDescription>
           </CardHeader>
           <CardContent>
             <form onSubmit={handleSubmit} className="space-y-4">
@@ -407,17 +407,17 @@ const Dashboard = () => {
     return (
       <div className="flex flex-col items-center relative" key={node.id}>
         {/* Node Card */}
-        <div className={`relative ${isRoot ? 'bg-gradient-to-r from-blue-500 to-purple-500 text-white' : 'bg-white border-2 border-gray-200'} rounded-lg p-3 shadow-lg w-[200px]`}>
+        <div className={`relative ${isRoot ? 'bg-gradient-to-r from-blue-500 to-purple-500 text-white' : 'bg-white border-2 border-gray-200'} rounded-lg p-3 shadow-lg w-[160px] sm:w-[200px]`}>
           <div className="text-center">
             <div className="flex items-center justify-center mb-1">
               <div className={`w-3 h-3 ${isRoot ? 'bg-white' : 'bg-blue-500'} rounded-full mr-2`}></div>
-              <span className="font-semibold text-xs">{node.name}</span>
+              <span className="font-semibold text-[11px] sm:text-xs">{node.name}</span>
             </div>
-            <div className="text-xs opacity-80 truncate">{node.email}</div>
-            <Badge variant={isRoot ? "secondary" : "outline"} className="mt-1 text-xs px-2 py-0">
+            <div className="text-[11px] sm:text-xs opacity-80 truncate">{node.email}</div>
+            <Badge variant={isRoot ? "secondary" : "outline"} className="mt-1 text-[10px] sm:text-xs px-2 py-0">
               L{node.level}
             </Badge>
-            <div className="text-xs mt-1 opacity-70">
+            <div className="text-[11px] sm:text-xs mt-1 opacity-70">
               {node.children_count} members
             </div>
           </div>
@@ -455,14 +455,14 @@ const Dashboard = () => {
       {/* Header */}
       <div className="bg-white shadow-sm border-b">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between items-center py-4">
+          <div className="flex justify-between items-center py-3">
             <div className="flex items-center space-x-4">
-              <h1 className="text-2xl font-bold text-gray-900">KHLP Dashboard</h1>
+              <h1 className="text-xl sm:text-2xl font-bold text-gray-900">KHLP Dashboard</h1>
               {user?.is_owner && <Badge className="bg-yellow-100 text-yellow-800">Owner</Badge>}
             </div>
             <div className="flex items-center space-x-4">
-              <span className="text-sm text-gray-600">Welcome, {user?.name}</span>
-              <Button variant="outline" onClick={logout} data-testid="logout-button">
+              <span className="text-xs sm:text-sm text-gray-600">Welcome, {user?.name}</span>
+              <Button variant="outline" className="h-9 px-3" onClick={logout} data-testid="logout-button">
                 Logout
               </Button>
             </div>
@@ -472,34 +472,34 @@ const Dashboard = () => {
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {/* Combined Stats Card */}
-        <Card className="mb-8 bg-gradient-to-r from-blue-50 to-purple-50 border-0 shadow-lg">
+        <Card className="mb-6 sm:mb-8 bg-gradient-to-r from-blue-50 to-purple-50 border-0 shadow-lg">
           <CardHeader className="pb-4">
-            <CardTitle className="text-lg font-semibold text-gray-800 flex items-center">
+            <CardTitle className="text-base sm:text-lg font-semibold text-gray-800 flex items-center">
               <div className="w-2 h-2 bg-blue-500 rounded-full mr-3"></div>
               Team Overview
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 sm:gap-6">
               <div className="text-center">
-                <div className="text-4xl font-bold text-green-600 mb-2" data-testid="total-downline-count">
+                <div className="text-3xl sm:text-4xl font-bold text-green-600 mb-1 sm:mb-2" data-testid="total-downline-count">
                   {stats?.total_downline || 0}
                 </div>
-                <p className="text-sm font-medium text-gray-700">Total Team Members</p>
+                <p className="text-xs sm:text-sm font-medium text-gray-700">Total Team Members</p>
                 <p className="text-xs text-gray-500">All members in your network</p>
               </div>
               <div className="text-center">
-                <div className="text-4xl font-bold text-purple-600 mb-2" data-testid="user-level">
+                <div className="text-3xl sm:text-4xl font-bold text-purple-600 mb-1 sm:mb-2" data-testid="user-level">
                   {stats?.level || 0}
                 </div>
-                <p className="text-sm font-medium text-gray-700">Your Level</p>
+                <p className="text-xs sm:text-sm font-medium text-gray-700">Your Level</p>
                 <p className="text-xs text-gray-500">Position in hierarchy</p>
               </div>
               <div className="text-center">
-                <div className="text-4xl font-bold text-blue-600 mb-2">
+                <div className="text-3xl sm:text-4xl font-bold text-blue-600 mb-1 sm:mb-2">
                   {myTeam.length}/2
                 </div>
-                <p className="text-sm font-medium text-gray-700">Direct Members</p>
+                <p className="text-xs sm:text-sm font-medium text-gray-700">Direct Members</p>
                 <p className="text-xs text-gray-500">Maximum allowed</p>
               </div>
             </div>
@@ -507,63 +507,43 @@ const Dashboard = () => {
         </Card>
 
         {/* Add Team Member Button - Always Visible */}
-        <div className="flex justify-between items-center mb-6">
+        <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center mb-4 sm:mb-6 gap-3">
           <div>
-            <h2 className="text-2xl font-bold text-gray-900">Team Management</h2>
-            <p className="text-sm text-gray-600">Manage your team members and view hierarchy</p>
+            <h2 className="text-xl sm:text-2xl font-bold text-gray-900">Team Management</h2>
+            <p className="text-xs sm:text-sm text-gray-600">Manage your team members and view hierarchy</p>
           </div>
           <Dialog open={showInviteDialog} onOpenChange={setShowInviteDialog}>
             <DialogTrigger asChild>
               <Button 
-                className="bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white shadow-lg px-6 py-3" 
+                className="w-full sm:w-auto bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white shadow-lg px-5 py-2.5" 
                 data-testid="add-member-button"
                 disabled={myTeam.length >= 2}
               >
-                <div className="flex items-center space-x-2">
+                <div className="flex items-center justify-center sm:justify-start space-x-2">
                   <div className="w-5 h-5 rounded-full bg-white/20 flex items-center justify-center">
                     <span className="text-sm">+</span>
                   </div>
-                  <span>Add Team Member ({myTeam.length}/2)</span>
+                  <span className="text-sm sm:text-base">Add Team Member ({myTeam.length}/2)</span>
                 </div>
               </Button>
             </DialogTrigger>
             <DialogContent className="sm:max-w-md">
               <DialogHeader>
-                <DialogTitle className="text-xl font-semibold">Invite New Team Member</DialogTitle>
-                <DialogDescription className="text-gray-600">
+                <DialogTitle className="text-lg sm:text-xl font-semibold">Invite New Team Member</DialogTitle>
+                <DialogDescription className="text-sm sm:text-base text-gray-600">
                   Send an invitation to add someone to your team. You can invite up to 2 direct members.
                 </DialogDescription>
               </DialogHeader>
               <div className="space-y-4">
                 <div className="space-y-2">
                   <Label htmlFor="invite-name" className="text-sm font-medium">Full Name</Label>
-                  <Input
-                    id="invite-name"
-                    placeholder="Enter their full name"
-                    value={inviteData.name}
-                    onChange={(e) => setInviteData({...inviteData, name: e.target.value})}
-                    data-testid="invite-name-input"
-                    className="h-11"
-                  />
+                  <Input id="invite-name" placeholder="Enter their full name" value={inviteData.name} onChange={(e) => setInviteData({...inviteData, name: e.target.value})} data-testid="invite-name-input" className="h-10 sm:h-11" />
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="invite-email" className="text-sm font-medium">Email Address</Label>
-                  <Input
-                    id="invite-email"
-                    type="email"
-                    placeholder="Enter their email address"
-                    value={inviteData.email}
-                    onChange={(e) => setInviteData({...inviteData, email: e.target.value})}
-                    data-testid="invite-email-input"
-                    className="h-11"
-                  />
+                  <Input id="invite-email" type="email" placeholder="Enter their email address" value={inviteData.email} onChange={(e) => setInviteData({...inviteData, email: e.target.value})} data-testid="invite-email-input" className="h-10 sm:h-11" />
                 </div>
-                <Button 
-                  onClick={handleInvite}
-                  className="w-full h-11 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700"
-                  disabled={isLoading || !inviteData.email || !inviteData.name}
-                  data-testid="send-invitation-button"
-                >
+                <Button onClick={handleInvite} className="w-full h-10 sm:h-11 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700" disabled={isLoading || !inviteData.email || !inviteData.name} data-testid="send-invitation-button">
                   {isLoading ? 'Sending Invitation...' : 'Send Invitation'}
                 </Button>
               </div>
@@ -572,30 +552,16 @@ const Dashboard = () => {
         </div>
 
         {/* Enhanced Tabs */}
-        <Tabs defaultValue="tree" className="space-y-6">
+        <Tabs defaultValue="tree" className="space-y-4 sm:space-y-6">
           <div className="border-b border-gray-200">
-            <nav className="-mb-px flex space-x-8">
-              <button
-                onClick={() => setActiveTab('tree')}
-                className={`py-4 px-1 border-b-2 font-medium text-sm transition-colors duration-200 ${
-                  activeTab === 'tree'
-                    ? 'border-blue-500 text-blue-600 bg-blue-50/50'
-                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                }`}
-              >
+            <nav className="-mb-px flex space-x-4 sm:space-x-8">
+              <button onClick={() => setActiveTab('tree')} className={`py-3 sm:py-4 px-1 border-b-2 font-medium text-sm transition-colors duration-200 ${activeTab === 'tree' ? 'border-blue-500 text-blue-600 bg-blue-50/50' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'}`}>
                 <div className="flex items-center space-x-2">
                   <div className={`w-2 h-2 rounded-full ${activeTab === 'tree' ? 'bg-blue-500' : 'bg-gray-400'}`}></div>
                   <span>Team Hierarchy</span>
                 </div>
               </button>
-              <button
-                onClick={() => setActiveTab('team')}
-                className={`py-4 px-1 border-b-2 font-medium text-sm transition-colors duration-200 ${
-                  activeTab === 'team'
-                    ? 'border-blue-500 text-blue-600 bg-blue-50/50'
-                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                }`}
-              >
+              <button onClick={() => setActiveTab('team')} className={`py-3 sm:py-4 px-1 border-b-2 font-medium text-sm transition-colors duration-200 ${activeTab === 'team' ? 'border-blue-500 text-blue-600 bg-blue-50/50' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'}`}>
                 <div className="flex items-center space-x-2">
                   <div className={`w-2 h-2 rounded-full ${activeTab === 'team' ? 'bg-blue-500' : 'bg-gray-400'}`}></div>
                   <span>My Team Members</span>
@@ -680,14 +646,14 @@ const Dashboard = () => {
             <div className="space-y-6">
               <Card className="border-0 shadow-lg">
                 <CardHeader className="bg-gradient-to-r from-blue-50 to-purple-50 rounded-t-lg">
-                  <CardTitle className="text-xl font-semibold text-gray-900 flex items-center">
+                  <CardTitle className="text-lg sm:text-xl font-semibold text-gray-900 flex items-center">
                     <div className="w-3 h-3 bg-blue-500 rounded-full mr-3"></div>
                     Team Hierarchy
                   </CardTitle>
                   <CardDescription className="text-gray-600">
-                    Visual representation of your entire team structure
+                    <span className="text-sm sm:text-base">Visual representation of your entire team structure</span>
                     {teamTree && (
-                      <span className="block mt-2 text-sm font-medium text-blue-700">
+                      <span className="block mt-2 text-xs sm:text-sm font-medium text-blue-700">
                         📊 {stats?.total_downline || 0} total members across {Math.max(...getAllLevels(teamTree)) + 1} levels
                       </span>
                     )}
@@ -695,27 +661,20 @@ const Dashboard = () => {
                 </CardHeader>
                 <CardContent className="p-0">
                   {teamTree ? (
-                    <div 
-                      className="overflow-x-auto overflow-y-auto max-h-[600px] py-8 scrollbar-thin scrollbar-thumb-gray-300 scrollbar-track-gray-100" 
-                      data-testid="team-tree"
-                      style={{
-                        scrollbarWidth: 'thin',
-                        scrollbarColor: '#d1d5db #f3f4f6'
-                      }}
-                    >
-                      <div className="flex justify-center min-w-max px-8">
+                    <div className="overflow-x-auto overflow-y-auto max-h-[65vh] sm:max-h-[600px] py-6 sm:py-8 scrollbar-thin scrollbar-thumb-gray-300 scrollbar-track-gray-100" data-testid="team-tree" style={{ scrollbarWidth: 'thin', scrollbarColor: '#d1d5db #f3f4f6' }}>
+                      <div className="flex justify-center min-w-max px-4 sm:px-8">
                         {renderTreeNode(teamTree, true)}
                       </div>
-                      <div className="mt-6 text-center text-sm text-gray-500 bg-gray-50 py-3 mx-6 rounded-lg">
+                      <div className="mt-4 sm:mt-6 text-center text-xs sm:text-sm text-gray-500 bg-gray-50 py-2.5 sm:py-3 mx-4 sm:mx-6 rounded-lg">
                         💡 Scroll horizontally to view the complete team tree
                       </div>
                     </div>
                   ) : (
                     <div className="text-center py-12">
-                      <div className="w-16 h-16 mx-auto bg-gray-200 rounded-full flex items-center justify-center mb-4">
-                        <span className="text-2xl">🌳</span>
+                      <div className="w-14 h-14 sm:w-16 sm:h-16 mx-auto bg-gray-200 rounded-full flex items-center justify-center mb-4">
+                        <span className="text-xl sm:text-2xl">🌳</span>
                       </div>
-                      <p className="text-gray-500 text-lg">Loading team hierarchy...</p>
+                      <p className="text-gray-500 text-base sm:text-lg">Loading team hierarchy...</p>
                     </div>
                   )}
                 </CardContent>
