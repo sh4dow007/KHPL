@@ -3,6 +3,7 @@ import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import axios from 'axios';
 import logo from './assets/logo.png';
 import InstallPrompt from './components/InstallPrompt';
+import InstallButton from './components/InstallButton';
 import './App.css';
 
 // Import Shadcn components
@@ -97,10 +98,216 @@ const AuthProvider = ({ children }) => {
     toast.success('Logged out successfully');
   };
 
+  const forgotPassword = async (phone) => {
+    try {
+      const response = await axios.post(`${API}/auth/forgot-password`, { phone });
+      toast.success(response.data.message);
+      return response.data;
+    } catch (error) {
+      let errorMessage = 'Failed to send password reset. Please try again.';
+      
+      if (error.response?.data?.detail) {
+        errorMessage = error.response.data.detail;
+      } else if (error.message) {
+        errorMessage = error.message;
+      }
+      
+      toast.error(errorMessage);
+      return null;
+    }
+  };
+
+  const resetPassword = async (token, newPassword) => {
+    try {
+      const response = await axios.post(`${API}/auth/reset-password`, { 
+        token, 
+        new_password: newPassword 
+      });
+      toast.success(response.data.message);
+      return true;
+    } catch (error) {
+      let errorMessage = 'Failed to reset password. Please try again.';
+      
+      if (error.response?.data?.detail) {
+        errorMessage = error.response.data.detail;
+      } else if (error.message) {
+        errorMessage = error.message;
+      }
+      
+      toast.error(errorMessage);
+      return false;
+    }
+  };
+
+  const changePassword = async (currentPassword, newPassword) => {
+    try {
+      const response = await axios.post(`${API}/auth/change-password`, { 
+        current_password: currentPassword, 
+        new_password: newPassword 
+      });
+      toast.success(response.data.message);
+      return true;
+    } catch (error) {
+      let errorMessage = 'Failed to change password. Please try again.';
+      
+      if (error.response?.data?.detail) {
+        errorMessage = error.response.data.detail;
+      } else if (error.message) {
+        errorMessage = error.message;
+      }
+      
+      toast.error(errorMessage);
+      return false;
+    }
+  };
+
   return (
-    <AuthContext.Provider value={{ user, login, logout, loading }}>
+    <AuthContext.Provider value={{ user, login, logout, loading, forgotPassword, resetPassword, changePassword }}>
       {children}
     </AuthContext.Provider>
+  );
+};
+
+const ForgotPasswordDialog = () => {
+  const [phone, setPhone] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
+  const [resetToken, setResetToken] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [step, setStep] = useState(1); // 1: request reset, 2: reset password
+  const { forgotPassword, resetPassword } = useAuth();
+
+  const handleForgotPassword = async () => {
+    if (!phone.trim()) {
+      toast.error('Please enter your phone number');
+      return;
+    }
+    
+    setIsLoading(true);
+    const result = await forgotPassword(phone);
+    if (result && result.reset_token) {
+      setResetToken(result.reset_token);
+      setStep(2);
+    }
+    setIsLoading(false);
+  };
+
+  const handleResetPassword = async () => {
+    if (!newPassword.trim()) {
+      toast.error('Please enter a new password');
+      return;
+    }
+    
+    if (newPassword !== confirmPassword) {
+      toast.error('Passwords do not match');
+      return;
+    }
+    
+    if (newPassword.length < 6) {
+      toast.error('Password must be at least 6 characters long');
+      return;
+    }
+    
+    setIsLoading(true);
+    const success = await resetPassword(resetToken, newPassword);
+    if (success) {
+      setStep(1);
+      setPhone('');
+      setResetToken('');
+      setNewPassword('');
+      setConfirmPassword('');
+    }
+    setIsLoading(false);
+  };
+
+  return (
+    <Dialog>
+      <DialogTrigger asChild>
+        <Button variant="link" className="text-sm text-blue-600 hover:text-blue-800">
+          Forgot your password?
+        </Button>
+      </DialogTrigger>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle>
+            {step === 1 ? 'Reset Password' : 'Enter New Password'}
+          </DialogTitle>
+          <DialogDescription>
+            {step === 1 
+              ? 'Enter your phone number to receive a password reset token'
+              : 'Enter your new password below'
+            }
+          </DialogDescription>
+        </DialogHeader>
+        
+        {step === 1 ? (
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="reset-phone">Phone Number</Label>
+              <Input
+                id="reset-phone"
+                type="tel"
+                placeholder="Enter your phone number"
+                value={phone}
+                onChange={(e) => setPhone(e.target.value)}
+                required
+              />
+            </div>
+            
+            <Button 
+              onClick={handleForgotPassword}
+              disabled={isLoading}
+              className="w-full"
+            >
+              {isLoading ? 'Sending...' : 'Send Reset Token'}
+            </Button>
+          </div>
+        ) : (
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="new-password">New Password</Label>
+              <Input
+                id="new-password"
+                type="password"
+                placeholder="Enter new password"
+                value={newPassword}
+                onChange={(e) => setNewPassword(e.target.value)}
+                required
+              />
+            </div>
+            
+            <div className="space-y-2">
+              <Label htmlFor="confirm-password">Confirm Password</Label>
+              <Input
+                id="confirm-password"
+                type="password"
+                placeholder="Confirm new password"
+                value={confirmPassword}
+                onChange={(e) => setConfirmPassword(e.target.value)}
+                required
+              />
+            </div>
+            
+            <div className="flex gap-2">
+              <Button 
+                variant="outline"
+                onClick={() => setStep(1)}
+                className="flex-1"
+              >
+                Back
+              </Button>
+              <Button 
+                onClick={handleResetPassword}
+                disabled={isLoading}
+                className="flex-1"
+              >
+                {isLoading ? 'Resetting...' : 'Reset Password'}
+              </Button>
+            </div>
+          </div>
+        )}
+      </DialogContent>
+    </Dialog>
   );
 };
 
@@ -189,6 +396,25 @@ const Login = () => {
               >
                 {isLoading ? 'Signing in...' : 'Sign In'}
               </Button>
+              
+              {/* Forgot Password Link */}
+              <div className="text-center">
+                <ForgotPasswordDialog />
+              </div>
+              
+              {/* PWA Install Button */}
+              <div className="mt-4 pt-4 border-t border-gray-200">
+                <InstallButton 
+                  variant="outline" 
+                  size="sm" 
+                  className="w-full text-gray-600 hover:text-gray-800"
+                >
+                  📱 Install KHPL App
+                </InstallButton>
+                <p className="text-xs text-gray-500 mt-2 text-center">
+                  Install for quick access and offline functionality
+                </p>
+              </div>
             </form>
 
           </CardContent>
@@ -384,6 +610,114 @@ const RegisterFromInvitation = () => {
   );
 };
 
+const ChangePasswordDialog = () => {
+  const [currentPassword, setCurrentPassword] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
+  const { changePassword } = useAuth();
+
+  const handleChangePassword = async () => {
+    if (!currentPassword.trim()) {
+      toast.error('Please enter your current password');
+      return;
+    }
+    
+    if (!newPassword.trim()) {
+      toast.error('Please enter a new password');
+      return;
+    }
+    
+    if (newPassword !== confirmPassword) {
+      toast.error('New passwords do not match');
+      return;
+    }
+    
+    if (newPassword.length < 6) {
+      toast.error('Password must be at least 6 characters long');
+      return;
+    }
+    
+    if (currentPassword === newPassword) {
+      toast.error('New password must be different from current password');
+      return;
+    }
+    
+    setIsLoading(true);
+    const success = await changePassword(currentPassword, newPassword);
+    if (success) {
+      setCurrentPassword('');
+      setNewPassword('');
+      setConfirmPassword('');
+    }
+    setIsLoading(false);
+  };
+
+  return (
+    <Dialog>
+      <DialogTrigger asChild>
+        <Button variant="outline" size="sm" className="h-8 sm:h-10 px-2 sm:px-3 text-xs sm:text-sm flex-shrink-0">
+          🔒 Change Password
+        </Button>
+      </DialogTrigger>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle>Change Password</DialogTitle>
+          <DialogDescription>
+            Enter your current password and choose a new password
+          </DialogDescription>
+        </DialogHeader>
+        
+        <div className="space-y-4">
+          <div className="space-y-2">
+            <Label htmlFor="current-password">Current Password</Label>
+            <Input
+              id="current-password"
+              type="password"
+              placeholder="Enter current password"
+              value={currentPassword}
+              onChange={(e) => setCurrentPassword(e.target.value)}
+              required
+            />
+          </div>
+          
+          <div className="space-y-2">
+            <Label htmlFor="new-password-change">New Password</Label>
+            <Input
+              id="new-password-change"
+              type="password"
+              placeholder="Enter new password"
+              value={newPassword}
+              onChange={(e) => setNewPassword(e.target.value)}
+              required
+            />
+          </div>
+          
+          <div className="space-y-2">
+            <Label htmlFor="confirm-password-change">Confirm New Password</Label>
+            <Input
+              id="confirm-password-change"
+              type="password"
+              placeholder="Confirm new password"
+              value={confirmPassword}
+              onChange={(e) => setConfirmPassword(e.target.value)}
+              required
+            />
+          </div>
+          
+          <Button 
+            onClick={handleChangePassword}
+            disabled={isLoading}
+            className="w-full"
+          >
+            {isLoading ? 'Changing...' : 'Change Password'}
+          </Button>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+};
+
 const Dashboard = () => {
   const { user, logout } = useAuth();
   const [stats, setStats] = useState(null);
@@ -431,6 +765,44 @@ const Dashboard = () => {
       setTeamTree(null); // Set default null
     }
   };
+
+  // Scroll to center the current user in team hierarchy
+  const scrollToCenter = () => {
+    const treeContainer = document.querySelector('[data-testid="team-tree"]');
+    if (treeContainer) {
+      // Wait for the DOM to update, then scroll to center
+      setTimeout(() => {
+        const scrollWidth = treeContainer.scrollWidth;
+        const clientWidth = treeContainer.clientWidth;
+        
+        // If content is wider than container, center it
+        if (scrollWidth > clientWidth) {
+          // Calculate center position to show the root node (current user) in the center
+          const scrollLeft = (scrollWidth - clientWidth) / 2;
+          treeContainer.scrollLeft = scrollLeft;
+        }
+      }, 100);
+    }
+  };
+
+  // Effect to scroll to center when team tree changes or tab switches
+  useEffect(() => {
+    if (teamTree && activeTab === 'tree') {
+      scrollToCenter();
+    }
+  }, [teamTree, activeTab]);
+
+  // Also scroll to center when window resizes
+  useEffect(() => {
+    const handleResize = () => {
+      if (teamTree && activeTab === 'tree') {
+        scrollToCenter();
+      }
+    };
+
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, [teamTree, activeTab]);
 
   const handleInvite = async () => {
     setIsLoading(true);
@@ -556,7 +928,7 @@ ${user?.name || 'Team Leader'}`;
               )}
             </div>
 
-            {/* Right: Welcome + Logout */}
+            {/* Right: Welcome + Install + Logout */}
             <div className="flex items-center gap-2 sm:gap-4 min-w-0">
               <span className="text-xs sm:text-base text-gray-700 truncate hidden sm:inline">
                 Welcome, {user?.name}
@@ -564,6 +936,19 @@ ${user?.name || 'Team Leader'}`;
               <span className="text-xs text-gray-700 truncate sm:hidden">
                 {user?.name}
               </span>
+              
+              {/* Install App Button */}
+              <InstallButton
+                variant="outline"
+                size="sm"
+                className="h-8 sm:h-10 px-2 sm:px-3 text-xs sm:text-sm flex-shrink-0"
+                showText={false}
+                title="Install KHPL as an app"
+              />
+              
+              {/* Change Password Button */}
+              <ChangePasswordDialog />
+              
               <Button
                 variant="outline"
                 className="h-8 sm:h-10 px-2 sm:px-4 text-xs sm:text-sm flex-shrink-0"

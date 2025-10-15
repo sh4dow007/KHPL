@@ -173,6 +173,25 @@ class Token(BaseModel):
     token_type: str
     user: UserResponse
 
+class ForgotPasswordRequest(BaseModel):
+    phone: str
+
+class ResetPasswordRequest(BaseModel):
+    token: str
+    new_password: str
+
+class ChangePasswordRequest(BaseModel):
+    current_password: str
+    new_password: str
+
+class PasswordResetToken(BaseModel):
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    user_id: str
+    token: str = Field(default_factory=lambda: secrets.token_urlsafe(32))
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    expires_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc) + timedelta(hours=1))
+    used: bool = False
+
 # Utility functions
 def verify_password(plain_password: str, hashed_password: str) -> bool:
     try:
@@ -326,10 +345,8 @@ async def invite_user(invite_data: InviteUser, current_user: dict = Depends(get_
         if existing_invitation:
             raise HTTPException(status_code=400, detail="Invitation already sent to this email")
     
-    # Check team member limit (maximum 2 direct children)
-    current_children_count = await db.users.count_documents({"parent_id": current_user["id"]})
-    if current_children_count >= 2:
-        raise HTTPException(status_code=400, detail="You can only have a maximum of 2 direct team members")
+    # No invitation limit - parents can invite as many as they want
+    # Only registration is limited to first 2 people who actually register
     
     # Create invitation
     invitation = Invitation(
@@ -349,13 +366,27 @@ async def invite_user(invite_data: InviteUser, current_user: dict = Depends(get_
 
 @api_router.get("/invitation/{token}")
 async def get_invitation_details(token: str):
-    invitation = await db.invitations.find_one({
-        "token": token,
-        "status": "pending"
-    })
+    invitation = await db.invitations.find_one({"token": token})
     
     if not invitation:
-        raise HTTPException(status_code=404, detail="Invalid or expired invitation")
+        raise HTTPException(status_code=404, detail="Invitation not found")
+    
+    # Check if invitation is invalid
+    if invitation.get("status") == "invalid":
+        invalid_reason = invitation.get("invalid_reason", "This invitation is no longer valid")
+        raise HTTPException(status_code=400, detail=f"Invitation is invalid: {invalid_reason}")
+    
+    # Check if invitation is already accepted
+    if invitation.get("status") == "accepted":
+        raise HTTPException(status_code=400, detail="This invitation has already been used")
+    
+    # Check if invitation is expired
+    if invitation.get("status") == "expired":
+        raise HTTPException(status_code=400, detail="This invitation has expired")
+    
+    # Only process pending invitations
+    if invitation.get("status") != "pending":
+        raise HTTPException(status_code=400, detail="Invalid invitation status")
     
     # Convert stored datetime to timezone-aware for comparison
     expires_at = invitation["expires_at"]
@@ -368,6 +399,20 @@ async def get_invitation_details(token: str):
             {"$set": {"status": "expired"}}
         )
         raise HTTPException(status_code=400, detail="Invitation has expired")
+    
+    # Additional check: Verify parent still has space (double-check)
+    parent_id = invitation["invited_by"]
+    current_children_count = await db.users.count_documents({"parent_id": parent_id})
+    if current_children_count >= 2:
+        # Mark this invitation as invalid
+        await db.invitations.update_one(
+            {"token": token},
+            {"$set": {"status": "invalid", "invalid_reason": "Parent team is full (2 members already registered)"}}
+        )
+        raise HTTPException(
+            status_code=400, 
+            detail="This invitation is no longer valid: The team already has 2 members."
+        )
     
     return {
         "email": invitation["email"],
@@ -384,7 +429,18 @@ async def register_from_invitation(registration_data: RegisterFromInvitation):
     })
     
     if not invitation:
-        raise HTTPException(status_code=404, detail="Invalid or expired invitation")
+        # Check if invitation exists but is invalid
+        invalid_invitation = await db.invitations.find_one({"token": registration_data.token})
+        if invalid_invitation:
+            if invalid_invitation.get("status") == "invalid":
+                invalid_reason = invalid_invitation.get("invalid_reason", "This invitation is no longer valid")
+                raise HTTPException(status_code=400, detail=f"Registration failed: {invalid_reason}")
+            elif invalid_invitation.get("status") == "accepted":
+                raise HTTPException(status_code=400, detail="Registration failed: This invitation has already been used")
+            elif invalid_invitation.get("status") == "expired":
+                raise HTTPException(status_code=400, detail="Registration failed: This invitation has expired")
+        else:
+            raise HTTPException(status_code=404, detail="Invalid or expired invitation")
     
     # Convert stored datetime to timezone-aware for comparison
     expires_at = invitation["expires_at"]
@@ -406,6 +462,19 @@ async def register_from_invitation(registration_data: RegisterFromInvitation):
     parent_user = await db.users.find_one({"id": invitation["invited_by"]})
     if not parent_user:
         raise HTTPException(status_code=400, detail="Invalid invitation - inviter not found")
+    
+    # CRITICAL: Check if parent already has 2 members (registration limit enforcement)
+    current_children_count = await db.users.count_documents({"parent_id": invitation["invited_by"]})
+    if current_children_count >= 2:
+        # Mark this invitation as invalid since parent is full
+        await db.invitations.update_one(
+            {"token": registration_data.token},
+            {"$set": {"status": "invalid", "invalid_reason": "Parent team is full (2 members already registered)"}}
+        )
+        raise HTTPException(
+            status_code=400, 
+            detail="Registration failed: This team already has 2 members. Your invitation is no longer valid."
+        )
     
     # Create new user
     new_user = {
@@ -431,6 +500,24 @@ async def register_from_invitation(registration_data: RegisterFromInvitation):
         {"token": registration_data.token},
         {"$set": {"status": "accepted"}}
     )
+    
+    # CRITICAL: If this registration makes the parent reach 2 members, invalidate all remaining pending invitations
+    updated_children_count = await db.users.count_documents({"parent_id": invitation["invited_by"]})
+    if updated_children_count >= 2:
+        # Invalidate all remaining pending invitations for this parent
+        await db.invitations.update_many(
+            {
+                "invited_by": invitation["invited_by"],
+                "status": "pending"
+            },
+            {
+                "$set": {
+                    "status": "invalid", 
+                    "invalid_reason": "Parent team is now full (2 members registered)"
+                }
+            }
+        )
+        print(f"Invalidated remaining invitations for parent {invitation['invited_by']} - team now full")
     
     # Generate access token
     access_token_expires = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
@@ -564,6 +651,94 @@ async def delete_user(user_id: str, current_user: dict = Depends(get_current_use
     await delete_user_and_descendants(user_id)
     
     return {"message": f"User {user_to_delete.get('name', 'Unknown')} and all descendants deleted successfully"}
+
+@api_router.post("/auth/forgot-password")
+async def forgot_password(request: ForgotPasswordRequest):
+    """Send password reset token to user's phone"""
+    # Find user by phone number
+    user = await db.users.find_one({"phone": request.phone})
+    
+    if not user:
+        # Don't reveal if user exists or not for security
+        return {"message": "If a user with this phone number exists, a password reset link has been sent."}
+    
+    # Invalidate any existing reset tokens for this user
+    await db.password_reset_tokens.update_many(
+        {"user_id": user["id"], "used": False},
+        {"$set": {"used": True}}
+    )
+    
+    # Create new reset token
+    reset_token = PasswordResetToken(user_id=user["id"])
+    await db.password_reset_tokens.insert_one(reset_token.dict())
+    
+    # In a real app, you would send this token via SMS or email
+    # For now, we'll return it in the response for testing
+    return {
+        "message": "Password reset token generated successfully",
+        "reset_token": reset_token.token,  # Remove this in production
+        "expires_in": "1 hour"
+    }
+
+@api_router.post("/auth/reset-password")
+async def reset_password(request: ResetPasswordRequest):
+    """Reset password using reset token"""
+    # Find the reset token
+    reset_token_doc = await db.password_reset_tokens.find_one({
+        "token": request.token,
+        "used": False
+    })
+    
+    if not reset_token_doc:
+        raise HTTPException(status_code=400, detail="Invalid or expired reset token")
+    
+    # Check if token is expired
+    expires_at = reset_token_doc["expires_at"]
+    if expires_at.tzinfo is None:
+        expires_at = expires_at.replace(tzinfo=timezone.utc)
+    
+    if datetime.now(timezone.utc) > expires_at:
+        await db.password_reset_tokens.update_one(
+            {"token": request.token},
+            {"$set": {"used": True}}
+        )
+        raise HTTPException(status_code=400, detail="Reset token has expired")
+    
+    # Find the user
+    user = await db.users.find_one({"id": reset_token_doc["user_id"]})
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    # Update password
+    new_password_hash = get_password_hash(request.new_password)
+    await db.users.update_one(
+        {"id": user["id"]},
+        {"$set": {"password_hash": new_password_hash}}
+    )
+    
+    # Mark token as used
+    await db.password_reset_tokens.update_one(
+        {"token": request.token},
+        {"$set": {"used": True}}
+    )
+    
+    return {"message": "Password reset successfully"}
+
+@api_router.post("/auth/change-password")
+async def change_password(request: ChangePasswordRequest, current_user: dict = Depends(get_current_user)):
+    """Change password for authenticated user"""
+    # Verify current password
+    if not verify_password(request.current_password, current_user["password_hash"]):
+        raise HTTPException(status_code=400, detail="Current password is incorrect")
+    
+    # Update password
+    new_password_hash = get_password_hash(request.new_password)
+    await db.users.update_one(
+        {"id": current_user["id"]},
+        {"$set": {"password_hash": new_password_hash}}
+    )
+    
+    return {"message": "Password changed successfully"}
 
 # Include the router in the main app
 app.include_router(api_router)
