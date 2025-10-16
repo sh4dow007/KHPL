@@ -1,77 +1,79 @@
-const CACHE_NAME = 'khlp-v2';
+const CACHE_NAME = 'khlp-v7';
 const urlsToCache = [
   '/',
-  '/static/js/bundle.js',
-  '/static/css/main.css',
   '/manifest.json',
   '/logo192.svg',
-  '/logo512.svg'
+  '/logo512.svg',
+  '/logo.png'
 ];
 
 // Install event - cache resources
 self.addEventListener('install', (event) => {
-  try {
-    event.waitUntil(
-      caches.open(CACHE_NAME)
-        .then((cache) => {
-          console.log('Opened cache');
-          return cache.addAll(urlsToCache);
-        })
-        .catch((error) => {
-          console.error('Error caching resources:', error);
-        })
-    );
-  } catch (error) {
-    console.error('Error in install event:', error);
-  }
+  event.waitUntil(
+    caches.open(CACHE_NAME)
+      .then((cache) => cache.addAll(urlsToCache))
+      .then(() => self.skipWaiting())
+  );
 });
 
 // Fetch event - serve from cache when offline
 self.addEventListener('fetch', (event) => {
-  try {
-    event.respondWith(
-      caches.match(event.request)
-        .then((response) => {
-          // Return cached version or fetch from network
-          if (response) {
-            return response;
-          }
-          return fetch(event.request).catch(() => {
-            // If fetch fails, return a basic offline page
-            if (event.request.destination === 'document') {
-              return caches.match('/');
-            }
-          });
-        })
-        .catch((error) => {
-          console.error('Error in fetch event:', error);
-          return fetch(event.request);
-        })
-    );
-  } catch (error) {
-    console.error('Error handling fetch:', error);
-    return fetch(event.request);
-  }
+  event.respondWith(
+    caches.match(event.request)
+      .then((response) => {
+        if (response) {
+          return response;
+        }
+        
+        // For navigation requests, serve index.html
+        if (event.request.mode === 'navigate') {
+          return caches.match('/');
+        }
+        
+        return fetch(event.request);
+      })
+  );
 });
 
 // Activate event - clean up old caches
 self.addEventListener('activate', (event) => {
-  try {
-    event.waitUntil(
-      caches.keys().then((cacheNames) => {
-        return Promise.all(
-          cacheNames.map((cacheName) => {
-            if (cacheName !== CACHE_NAME) {
-              console.log('Deleting old cache:', cacheName);
-              return caches.delete(cacheName);
-            }
-          })
-        );
-      }).catch((error) => {
-        console.error('Error cleaning up caches:', error);
-      })
-    );
-  } catch (error) {
-    console.error('Error in activate event:', error);
-  }
+  event.waitUntil(
+    caches.keys().then((cacheNames) => {
+      return Promise.all(
+        cacheNames.map((cacheName) => {
+          if (cacheName !== CACHE_NAME) {
+            return caches.delete(cacheName);
+          }
+        })
+      );
+    }).then(() => self.clients.claim())
+  );
+});
+
+// Listen for beforeinstallprompt event
+self.addEventListener('beforeinstallprompt', (event) => {
+  // Store the event for the main thread to use
+  event.waitUntil(
+    self.clients.matchAll().then(clients => {
+      clients.forEach(client => {
+        client.postMessage({
+          type: 'INSTALL_PROMPT_AVAILABLE'
+        });
+      });
+    })
+  );
+});
+
+// Listen for appinstalled event
+self.addEventListener('appinstalled', (event) => {
+  // Notify all clients that the app was installed
+  event.waitUntil(
+    self.clients.matchAll().then(clients => {
+      clients.forEach(client => {
+        client.postMessage({
+          type: 'APP_INSTALLED'
+        });
+      });
+    })
+  );
 });

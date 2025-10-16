@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Button } from './ui/button';
-import { Download, Smartphone, Monitor } from 'lucide-react';
+import { Download } from 'lucide-react';
 
 const InstallButton = ({ 
   variant = "outline", 
@@ -8,110 +8,101 @@ const InstallButton = ({
   showIcon = true, 
   showText = true,
   className = "",
-  children 
+  children,
+  tooltipPosition = "auto"
 }) => {
   const [deferredPrompt, setDeferredPrompt] = useState(null);
   const [isIOS, setIsIOS] = useState(false);
   const [isStandalone, setIsStandalone] = useState(false);
+  const [isInstalling, setIsInstalling] = useState(false);
   const [message, setMessage] = useState('');
 
   useEffect(() => {
-    try {
-      // Check if running on iOS
-      const iOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
-      setIsIOS(iOS);
-      
-      // Check if already installed (standalone mode) - multiple detection methods
-      const standalone = window.matchMedia('(display-mode: standalone)').matches || 
-                        window.navigator.standalone === true ||
-                        window.matchMedia('(display-mode: fullscreen)').matches ||
-                        (window.screen && window.screen.height === window.innerHeight && window.screen.width === window.innerWidth);
+    // Check if running on iOS
+    const iOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
+    setIsIOS(iOS);
+    
+    // Check if PWA is already installed
+    const checkStandalone = () => {
+      return window.matchMedia('(display-mode: standalone)').matches ||
+             window.matchMedia('(display-mode: minimal-ui)').matches ||
+             window.navigator.standalone === true;
+    };
 
-      setIsStandalone(standalone);
+    setIsStandalone(checkStandalone());
 
-      // Debug logging
-      console.log('PWA Detection:', {
-        isStandalone: standalone,
-        displayMode: window.matchMedia('(display-mode: standalone)').matches,
-        navigatorStandalone: window.navigator.standalone,
-        fullscreen: window.matchMedia('(display-mode: fullscreen)').matches,
-        screenMatch: window.screen && window.screen.height === window.innerHeight && window.screen.width === window.innerWidth
-      });
+    // Listen for beforeinstallprompt event
+    const handleBeforeInstallPrompt = (e) => {
+      e.preventDefault();
+      setDeferredPrompt(e);
+    };
 
-      const handleBeforeInstallPrompt = (e) => {
-        try {
-          e.preventDefault();
-          setDeferredPrompt(e);
-        } catch (error) {
-          console.error('Error handling beforeinstallprompt:', error);
-        }
-      };
+    // Listen for appinstalled event
+    const handleAppInstalled = () => {
+      setIsStandalone(true);
+      setIsInstalling(false);
+      setMessage('KHPL has been installed successfully!');
+      setTimeout(() => setMessage(''), 3000);
+    };
 
-      window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
+    window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
+    window.addEventListener('appinstalled', handleAppInstalled);
 
-      return () => {
-        try {
-          window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
-        } catch (error) {
-          console.error('Error removing event listener:', error);
-        }
-      };
-    } catch (error) {
-      console.error('Error in InstallButton useEffect:', error);
-    }
+    return () => {
+      window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
+      window.removeEventListener('appinstalled', handleAppInstalled);
+    };
   }, []);
 
-  const showMessage = (msg) => {
+  const showMessage = (msg, duration = 3000) => {
     setMessage(msg);
-    setTimeout(() => setMessage(''), 3000);
+    setTimeout(() => setMessage(''), duration);
   };
 
-  const handleInstallClick = async () => {
+  const handleInstallClick = async (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    
+    // Check if PWA is supported
+    if (!('serviceWorker' in navigator)) {
+      showMessage("PWA not supported in this browser");
+      return;
+    }
+
+    // If already installed, show message
+    if (isStandalone) {
+      showMessage("KHPL is already installed on your device");
+      return;
+    }
+
+    setIsInstalling(true);
+    showMessage("Installing KHPL...");
+
     try {
-      // Check if PWA is supported
-      if (!('serviceWorker' in navigator)) {
-        showMessage("PWA not supported in this browser");
-        return;
-      }
-
-      // If already installed, show message
-      if (isStandalone) {
-        showMessage("KHPL is already installed on your device");
-        return;
-      }
-
-      // Try to trigger install prompt
+      // Use deferred prompt if available
       if (deferredPrompt) {
-        try {
-          deferredPrompt.prompt();
-          const { outcome } = await deferredPrompt.userChoice;
-          
-          if (outcome === 'accepted') {
-            showMessage("KHPL is being installed...");
-          } else {
-            showMessage("Installation cancelled");
-          }
-          
-          // Clear the deferredPrompt so it can only be used once
+        deferredPrompt.prompt();
+        const { outcome } = await deferredPrompt.userChoice;
+        
+        if (outcome === 'accepted') {
+          showMessage("Installation accepted! KHPL is being installed...");
           setDeferredPrompt(null);
-        } catch (error) {
-          console.error('Error showing install prompt:', error);
-          showManualInstructions();
+        } else {
+          showMessage("Installation declined");
         }
       } else {
-        showManualInstructions();
+        // No prompt available, show instructions
+        if (isIOS) {
+          showMessage("iOS detected. Please tap Share → Add to Home Screen", 5000);
+        } else {
+          showMessage("Installation not available. Please look for the install icon in your browser's address bar.", 5000);
+        }
       }
     } catch (error) {
-      console.error('Error in handleInstallClick:', error);
+      console.error('Installation error:', error);
       showMessage("Installation failed. Please try again.");
-    }
-  };
-
-  const showManualInstructions = () => {
-    if (isIOS) {
-      showMessage("iPhone/iPad: Tap Share → Add to Home Screen");
-    } else {
-      showMessage("Look for the install icon in your browser's address bar");
+    } finally {
+      setIsInstalling(false);
     }
   };
 
@@ -127,15 +118,23 @@ const InstallButton = ({
         size={size}
         className={`${className} ${showIcon ? 'flex items-center gap-2' : ''}`}
         onClick={handleInstallClick}
+        onMouseDown={(e) => e.preventDefault()}
+        onTouchStart={(e) => e.preventDefault()}
+        disabled={isInstalling}
         title="Install KHPL as an app"
+        type="button"
       >
         {showIcon && <Download className="h-4 w-4" />}
-        {showText && (children || "Install App")}
+        {showText && (children || (isInstalling ? "Installing..." : "Install App"))}
       </Button>
       
       {/* Message display */}
       {message && (
-        <div className="absolute top-full left-0 mt-2 bg-gray-800 text-white text-xs rounded px-3 py-2 z-50 max-w-xs break-words shadow-lg">
+        <div className={`absolute top-full mt-2 bg-gray-800 text-white text-xs rounded px-3 py-2 z-50 max-w-xs break-words shadow-lg ${
+          tooltipPosition === "right" ? 'right-0' : 
+          tooltipPosition === "left" ? 'left-0' : 
+          showText ? 'left-0' : 'right-0'
+        }`}>
           {message}
         </div>
       )}

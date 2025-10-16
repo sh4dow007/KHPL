@@ -48,6 +48,18 @@ const AuthProvider = ({ children }) => {
       } else {
         setLoading(false);
       }
+
+      // Handle installation parameter
+      const urlParams = new URLSearchParams(window.location.search);
+      if (urlParams.get('install') === 'true') {
+        // This is an installation window, try to trigger installation
+        setTimeout(() => {
+          if (window.deferredPrompt) {
+            console.log('Triggering installation from install parameter');
+            window.deferredPrompt.prompt();
+          }
+        }, 1000);
+      }
     } catch (error) {
       console.error('Error in AuthProvider useEffect:', error);
       setLoading(false);
@@ -655,6 +667,7 @@ ${user?.name || 'Team Leader'}`;
                 size="sm"
                 className="h-8 sm:h-10 px-2 sm:px-3 text-xs sm:text-sm flex-shrink-0"
                 showText={false}
+                tooltipPosition="right"
                 title="Install KHPL as an app"
               />
               
