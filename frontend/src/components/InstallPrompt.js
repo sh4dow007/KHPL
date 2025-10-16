@@ -7,6 +7,7 @@ const InstallPrompt = () => {
   const [showInstallPrompt, setShowInstallPrompt] = useState(false);
   const [isIOS, setIsIOS] = useState(false);
   const [isStandalone, setIsStandalone] = useState(false);
+  const [canInstall, setCanInstall] = useState(false);
 
   useEffect(() => {
     try {
@@ -18,12 +19,18 @@ const InstallPrompt = () => {
       const standalone = window.matchMedia('(display-mode: standalone)').matches || 
                         window.navigator.standalone === true ||
                         window.matchMedia('(display-mode: fullscreen)').matches ||
-                        (window.screen && window.screen.height === window.innerHeight && window.screen.width === window.innerWidth);
+                        window.matchMedia('(display-mode: minimal-ui)').matches ||
+                        document.referrer.includes('android-app://');
 
       setIsStandalone(standalone);
 
-      // Only show for iOS users who haven't installed yet
-      if (iOS && !standalone) {
+      // Check if install prompt is available
+      if (window.deferredPrompt && !standalone) {
+        setCanInstall(true);
+      }
+
+      // Only show for users who haven't installed yet and can install
+      if (!standalone && (canInstall || iOS)) {
         // Check if user dismissed recently
         const dismissed = localStorage.getItem('pwa-install-dismissed');
         if (!dismissed) {
@@ -38,12 +45,35 @@ const InstallPrompt = () => {
           }
         }
       }
+
+      // Listen for beforeinstallprompt event
+      const handleBeforeInstallPrompt = (e) => {
+        setCanInstall(true);
+        if (!standalone) {
+          setShowInstallPrompt(true);
+        }
+      };
+
+      // Listen for appinstalled event
+      const handleAppInstalled = () => {
+        setIsStandalone(true);
+        setCanInstall(false);
+        setShowInstallPrompt(false);
+      };
+
+      window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
+      window.addEventListener('appinstalled', handleAppInstalled);
+
+      return () => {
+        window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
+        window.removeEventListener('appinstalled', handleAppInstalled);
+      };
     } catch (error) {
       console.error('Error in InstallPrompt useEffect:', error);
       // If there's an error, don't show the prompt
       setShowInstallPrompt(false);
     }
-  }, []);
+  }, [canInstall]);
 
   const handleDismiss = () => {
     try {
@@ -83,21 +113,59 @@ const InstallPrompt = () => {
         </CardHeader>
         <CardContent className="pt-0">
           <div className="space-y-3">
-            <div className="flex items-center text-sm text-gray-600">
-              <Smartphone className="h-4 w-4 mr-2" />
-              <span>iPhone/iPad: Tap Share → Add to Home Screen</span>
-            </div>
-            <div className="flex items-center text-sm text-gray-600">
-              <Monitor className="h-4 w-4 mr-2" />
-              <span>Desktop: Look for install icon in address bar</span>
-            </div>
-            <Button 
-              variant="outline" 
-              onClick={handleDismiss}
-              className="w-full mt-3"
-            >
-              Got it
-            </Button>
+            {canInstall ? (
+              <div className="space-y-3">
+                <p className="text-sm text-gray-600">
+                  Install KHPL on your device for quick access and offline functionality.
+                </p>
+                <div className="flex gap-2">
+                  <Button 
+                    onClick={async () => {
+                      try {
+                        if (window.deferredPrompt) {
+                          await window.deferredPrompt.prompt();
+                          const { outcome } = await window.deferredPrompt.userChoice;
+                          if (outcome === 'accepted') {
+                            handleDismiss();
+                          }
+                        }
+                      } catch (error) {
+                        console.error('Installation error:', error);
+                      }
+                    }}
+                    className="flex-1 bg-blue-600 hover:bg-blue-700 text-white"
+                  >
+                    <Download className="h-4 w-4 mr-2" />
+                    Install Now
+                  </Button>
+                  <Button 
+                    variant="outline" 
+                    onClick={handleDismiss}
+                    className="flex-1"
+                  >
+                    Maybe Later
+                  </Button>
+                </div>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                <div className="flex items-center text-sm text-gray-600">
+                  <Smartphone className="h-4 w-4 mr-2" />
+                  <span>iPhone/iPad: Tap Share → Add to Home Screen</span>
+                </div>
+                <div className="flex items-center text-sm text-gray-600">
+                  <Monitor className="h-4 w-4 mr-2" />
+                  <span>Desktop: Look for install icon in address bar</span>
+                </div>
+                <Button 
+                  variant="outline" 
+                  onClick={handleDismiss}
+                  className="w-full mt-3"
+                >
+                  Got it
+                </Button>
+              </div>
+            )}
           </div>
         </CardContent>
       </Card>

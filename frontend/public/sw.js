@@ -57,7 +57,8 @@ self.addEventListener('beforeinstallprompt', (event) => {
     self.clients.matchAll().then(clients => {
       clients.forEach(client => {
         client.postMessage({
-          type: 'INSTALL_PROMPT_AVAILABLE'
+          type: 'INSTALL_PROMPT_AVAILABLE',
+          event: event
         });
       });
     })
@@ -66,6 +67,7 @@ self.addEventListener('beforeinstallprompt', (event) => {
 
 // Listen for appinstalled event
 self.addEventListener('appinstalled', (event) => {
+  console.log('PWA was installed');
   // Notify all clients that the app was installed
   event.waitUntil(
     self.clients.matchAll().then(clients => {

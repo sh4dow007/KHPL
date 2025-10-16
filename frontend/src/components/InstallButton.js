@@ -9,13 +9,15 @@ const InstallButton = ({
   showText = true,
   className = "",
   children,
-  tooltipPosition = "auto"
+  tooltipPosition = "auto",
+  title = "Install KHPL as an app"
 }) => {
   const [deferredPrompt, setDeferredPrompt] = useState(null);
   const [isIOS, setIsIOS] = useState(false);
   const [isStandalone, setIsStandalone] = useState(false);
   const [isInstalling, setIsInstalling] = useState(false);
   const [message, setMessage] = useState('');
+  const [canInstall, setCanInstall] = useState(false);
 
   useEffect(() => {
     // Check if running on iOS
@@ -26,31 +28,59 @@ const InstallButton = ({
     const checkStandalone = () => {
       return window.matchMedia('(display-mode: standalone)').matches ||
              window.matchMedia('(display-mode: minimal-ui)').matches ||
-             window.navigator.standalone === true;
+             window.matchMedia('(display-mode: fullscreen)').matches ||
+             window.navigator.standalone === true ||
+             document.referrer.includes('android-app://');
     };
 
-    setIsStandalone(checkStandalone());
+    const standalone = checkStandalone();
+    setIsStandalone(standalone);
+
+    // Use global deferred prompt if available
+    if (window.deferredPrompt && !standalone) {
+      setDeferredPrompt(window.deferredPrompt);
+      setCanInstall(true);
+    }
 
     // Listen for beforeinstallprompt event
     const handleBeforeInstallPrompt = (e) => {
       e.preventDefault();
+      window.deferredPrompt = e;
       setDeferredPrompt(e);
+      setCanInstall(true);
     };
 
     // Listen for appinstalled event
     const handleAppInstalled = () => {
       setIsStandalone(true);
       setIsInstalling(false);
+      setCanInstall(false);
+      setDeferredPrompt(null);
+      window.deferredPrompt = null;
       setMessage('KHPL has been installed successfully!');
       setTimeout(() => setMessage(''), 3000);
     };
 
+    // Listen for service worker messages
+    const handleServiceWorkerMessage = (event) => {
+      if (event.data && event.data.type === 'APP_INSTALLED') {
+        handleAppInstalled();
+      }
+    };
+
     window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
     window.addEventListener('appinstalled', handleAppInstalled);
+    
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.addEventListener('message', handleServiceWorkerMessage);
+    }
 
     return () => {
       window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
       window.removeEventListener('appinstalled', handleAppInstalled);
+      if ('serviceWorker' in navigator) {
+        navigator.serviceWorker.removeEventListener('message', handleServiceWorkerMessage);
+      }
     };
   }, []);
 
@@ -81,12 +111,13 @@ const InstallButton = ({
     try {
       // Use deferred prompt if available
       if (deferredPrompt) {
-        deferredPrompt.prompt();
+        const result = await deferredPrompt.prompt();
         const { outcome } = await deferredPrompt.userChoice;
         
         if (outcome === 'accepted') {
           showMessage("Installation accepted! KHPL is being installed...");
           setDeferredPrompt(null);
+          window.deferredPrompt = null;
         } else {
           showMessage("Installation declined");
         }
@@ -106,8 +137,8 @@ const InstallButton = ({
     }
   };
 
-  // Don't show if already installed
-  if (isStandalone) {
+  // Don't show if already installed or if installation is not available
+  if (isStandalone || (!canInstall && !isIOS)) {
     return null;
   }
 
@@ -121,7 +152,7 @@ const InstallButton = ({
         onMouseDown={(e) => e.preventDefault()}
         onTouchStart={(e) => e.preventDefault()}
         disabled={isInstalling}
-        title="Install KHPL as an app"
+        title={title}
         type="button"
       >
         {showIcon && <Download className="h-4 w-4" />}

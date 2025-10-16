@@ -35,7 +35,14 @@ window.addEventListener('beforeinstallprompt', (e) => {
   try {
     e.preventDefault();
     window.deferredPrompt = e;
+    console.log('PWA install prompt available');
   } catch (error) {
     console.error('Error handling beforeinstallprompt:', error);
   }
+});
+
+// Listen for appinstalled event
+window.addEventListener('appinstalled', (e) => {
+  console.log('PWA was installed');
+  window.deferredPrompt = null;
 });
