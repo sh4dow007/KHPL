@@ -2,8 +2,6 @@ const CACHE_NAME = 'khlp-v7';
 const urlsToCache = [
   '/',
   '/manifest.json',
-  '/logo192.svg',
-  '/logo512.svg',
   '/logo.png'
 ];
 
