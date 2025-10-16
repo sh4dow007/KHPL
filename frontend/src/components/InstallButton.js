@@ -16,25 +16,49 @@ const InstallButton = ({
   const [message, setMessage] = useState('');
 
   useEffect(() => {
-    // Check if running on iOS
-    const iOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
-    setIsIOS(iOS);
-    
-    // Check if already installed (standalone mode)
-    const standalone = window.matchMedia('(display-mode: standalone)').matches || 
-                      window.navigator.standalone === true;
-    setIsStandalone(standalone);
+    try {
+      // Check if running on iOS
+      const iOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
+      setIsIOS(iOS);
+      
+      // Check if already installed (standalone mode) - multiple detection methods
+      const standalone = window.matchMedia('(display-mode: standalone)').matches || 
+                        window.navigator.standalone === true ||
+                        window.matchMedia('(display-mode: fullscreen)').matches ||
+                        (window.screen && window.screen.height === window.innerHeight && window.screen.width === window.innerWidth);
 
-    const handleBeforeInstallPrompt = (e) => {
-      e.preventDefault();
-      setDeferredPrompt(e);
-    };
+      setIsStandalone(standalone);
 
-    window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
+      // Debug logging
+      console.log('PWA Detection:', {
+        isStandalone: standalone,
+        displayMode: window.matchMedia('(display-mode: standalone)').matches,
+        navigatorStandalone: window.navigator.standalone,
+        fullscreen: window.matchMedia('(display-mode: fullscreen)').matches,
+        screenMatch: window.screen && window.screen.height === window.innerHeight && window.screen.width === window.innerWidth
+      });
 
-    return () => {
-      window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
-    };
+      const handleBeforeInstallPrompt = (e) => {
+        try {
+          e.preventDefault();
+          setDeferredPrompt(e);
+        } catch (error) {
+          console.error('Error handling beforeinstallprompt:', error);
+        }
+      };
+
+      window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
+
+      return () => {
+        try {
+          window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
+        } catch (error) {
+          console.error('Error removing event listener:', error);
+        }
+      };
+    } catch (error) {
+      console.error('Error in InstallButton useEffect:', error);
+    }
   }, []);
 
   const showMessage = (msg) => {
@@ -43,38 +67,43 @@ const InstallButton = ({
   };
 
   const handleInstallClick = async () => {
-    // Check if PWA is supported
-    if (!('serviceWorker' in navigator)) {
-      showMessage("PWA not supported in this browser");
-      return;
-    }
+    try {
+      // Check if PWA is supported
+      if (!('serviceWorker' in navigator)) {
+        showMessage("PWA not supported in this browser");
+        return;
+      }
 
-    // If already installed, show message
-    if (isStandalone) {
-      showMessage("KHPL is already installed on your device");
-      return;
-    }
+      // If already installed, show message
+      if (isStandalone) {
+        showMessage("KHPL is already installed on your device");
+        return;
+      }
 
-    // Try to trigger install prompt
-    if (deferredPrompt) {
-      try {
-        deferredPrompt.prompt();
-        const { outcome } = await deferredPrompt.userChoice;
-        
-        if (outcome === 'accepted') {
-          showMessage("KHPL is being installed...");
-        } else {
-          showMessage("Installation cancelled");
+      // Try to trigger install prompt
+      if (deferredPrompt) {
+        try {
+          deferredPrompt.prompt();
+          const { outcome } = await deferredPrompt.userChoice;
+          
+          if (outcome === 'accepted') {
+            showMessage("KHPL is being installed...");
+          } else {
+            showMessage("Installation cancelled");
+          }
+          
+          // Clear the deferredPrompt so it can only be used once
+          setDeferredPrompt(null);
+        } catch (error) {
+          console.error('Error showing install prompt:', error);
+          showManualInstructions();
         }
-        
-        // Clear the deferredPrompt so it can only be used once
-        setDeferredPrompt(null);
-      } catch (error) {
-        console.error('Error showing install prompt:', error);
+      } else {
         showManualInstructions();
       }
-    } else {
-      showManualInstructions();
+    } catch (error) {
+      console.error('Error in handleInstallClick:', error);
+      showMessage("Installation failed. Please try again.");
     }
   };
 
@@ -106,7 +135,7 @@ const InstallButton = ({
       
       {/* Message display */}
       {message && (
-        <div className="absolute top-full left-0 right-0 mt-2 bg-gray-800 text-white text-xs rounded px-2 py-1 z-50 whitespace-nowrap">
+        <div className="absolute top-full left-0 mt-2 bg-gray-800 text-white text-xs rounded px-3 py-2 z-50 max-w-xs break-words shadow-lg">
           {message}
         </div>
       )}

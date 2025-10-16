@@ -173,24 +173,9 @@ class Token(BaseModel):
     token_type: str
     user: UserResponse
 
-class ForgotPasswordRequest(BaseModel):
-    phone: str
-
-class ResetPasswordRequest(BaseModel):
-    token: str
-    new_password: str
-
 class ChangePasswordRequest(BaseModel):
     current_password: str
     new_password: str
-
-class PasswordResetToken(BaseModel):
-    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
-    user_id: str
-    token: str = Field(default_factory=lambda: secrets.token_urlsafe(32))
-    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
-    expires_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc) + timedelta(hours=1))
-    used: bool = False
 
 # Utility functions
 def verify_password(plain_password: str, hashed_password: str) -> bool:
@@ -458,6 +443,11 @@ async def register_from_invitation(registration_data: RegisterFromInvitation):
     if existing_user:
         raise HTTPException(status_code=400, detail="User with this phone number already registered")
     
+    # Check if Aadhaar ID already exists
+    existing_aadhaar = await db.users.find_one({"aadhaar_id": registration_data.aadhaar_id})
+    if existing_aadhaar:
+        raise HTTPException(status_code=400, detail="User with this Aadhaar ID already registered")
+    
     # Get parent user to determine level
     parent_user = await db.users.find_one({"id": invitation["invited_by"]})
     if not parent_user:
@@ -652,77 +642,7 @@ async def delete_user(user_id: str, current_user: dict = Depends(get_current_use
     
     return {"message": f"User {user_to_delete.get('name', 'Unknown')} and all descendants deleted successfully"}
 
-@api_router.post("/auth/forgot-password")
-async def forgot_password(request: ForgotPasswordRequest):
-    """Send password reset token to user's phone"""
-    # Find user by phone number
-    user = await db.users.find_one({"phone": request.phone})
-    
-    if not user:
-        # Don't reveal if user exists or not for security
-        return {"message": "If a user with this phone number exists, a password reset link has been sent."}
-    
-    # Invalidate any existing reset tokens for this user
-    await db.password_reset_tokens.update_many(
-        {"user_id": user["id"], "used": False},
-        {"$set": {"used": True}}
-    )
-    
-    # Create new reset token
-    reset_token = PasswordResetToken(user_id=user["id"])
-    await db.password_reset_tokens.insert_one(reset_token.dict())
-    
-    # In a real app, you would send this token via SMS or email
-    # For now, we'll return it in the response for testing
-    return {
-        "message": "Password reset token generated successfully",
-        "reset_token": reset_token.token,  # Remove this in production
-        "expires_in": "1 hour"
-    }
-
-@api_router.post("/auth/reset-password")
-async def reset_password(request: ResetPasswordRequest):
-    """Reset password using reset token"""
-    # Find the reset token
-    reset_token_doc = await db.password_reset_tokens.find_one({
-        "token": request.token,
-        "used": False
-    })
-    
-    if not reset_token_doc:
-        raise HTTPException(status_code=400, detail="Invalid or expired reset token")
-    
-    # Check if token is expired
-    expires_at = reset_token_doc["expires_at"]
-    if expires_at.tzinfo is None:
-        expires_at = expires_at.replace(tzinfo=timezone.utc)
-    
-    if datetime.now(timezone.utc) > expires_at:
-        await db.password_reset_tokens.update_one(
-            {"token": request.token},
-            {"$set": {"used": True}}
-        )
-        raise HTTPException(status_code=400, detail="Reset token has expired")
-    
-    # Find the user
-    user = await db.users.find_one({"id": reset_token_doc["user_id"]})
-    if not user:
-        raise HTTPException(status_code=404, detail="User not found")
-    
-    # Update password
-    new_password_hash = get_password_hash(request.new_password)
-    await db.users.update_one(
-        {"id": user["id"]},
-        {"$set": {"password_hash": new_password_hash}}
-    )
-    
-    # Mark token as used
-    await db.password_reset_tokens.update_one(
-        {"token": request.token},
-        {"$set": {"used": True}}
-    )
-    
-    return {"message": "Password reset successfully"}
+# Password reset functionality removed - not practical without SMS/email integration
 
 @api_router.post("/auth/change-password")
 async def change_password(request: ChangePasswordRequest, current_user: dict = Depends(get_current_user)):
