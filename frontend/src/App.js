@@ -220,18 +220,14 @@ const Login = () => {
               </Button>
               
               {/* PWA Install Button */}
-              <div className="mt-4 pt-4 border-t border-gray-200">
-                <InstallButton 
-                  variant="outline" 
-                  size="sm" 
-                  className="w-full text-gray-600 hover:text-gray-800"
-                >
-                  📱 Install KHPL App
-                </InstallButton>
-                <p className="text-xs text-gray-500 mt-2 text-center">
-                  Install for quick access and offline functionality
-                </p>
-              </div>
+              <InstallButton 
+                variant="outline" 
+                size="sm" 
+                className="w-full text-gray-600 hover:text-gray-800 mt-4 border-t border-gray-200"
+                showText={true}
+              >
+                📱 Install KHPL App
+              </InstallButton>
             </form>
 
           </CardContent>

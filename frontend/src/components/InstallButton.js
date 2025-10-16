@@ -147,7 +147,7 @@ const InstallButton = ({
       <Button
         variant={variant}
         size={size}
-        className={`${className} ${showIcon ? 'flex items-center gap-2' : ''}`}
+        className={className}
         onClick={handleInstallClick}
         onMouseDown={(e) => e.preventDefault()}
         onTouchStart={(e) => e.preventDefault()}
@@ -158,6 +158,13 @@ const InstallButton = ({
         {showIcon && <Download className="h-4 w-4" />}
         {showText && (children || (isInstalling ? "Installing..." : "Install App"))}
       </Button>
+      
+      {/* Descriptive text for login page */}
+      {showText && className.includes('border-t') && (
+        <p className="text-xs text-gray-500 mt-2 text-center">
+          Install for quick access and offline functionality
+        </p>
+      )}
       
       {/* Message display */}
       {message && (
