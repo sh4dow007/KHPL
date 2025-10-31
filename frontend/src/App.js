@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import axios from 'axios';
 import logo from './assets/logo.png';
@@ -15,6 +15,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, Di
 import { Alert, AlertDescription } from './components/ui/alert';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from './components/ui/alert-dialog';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from './components/ui/tabs';
+import TreeGraph from './components/TreeGraph';
 import { Label } from './components/ui/label';
 import { Textarea } from './components/ui/textarea';
 import { toast } from 'sonner';
@@ -450,7 +451,6 @@ const Dashboard = () => {
   const [activeTab, setActiveTab] = useState('tree');
   const [showWhatsAppShare, setShowWhatsAppShare] = useState(false);
   const [inviteMessage, setInviteMessage] = useState('');
-  
   // Helper to truncate long names with an end ellipsis (keep beginning)
   const formatDisplayName = (name, maxChars = 18) => {
     if (!name) return '';
@@ -464,8 +464,6 @@ const Dashboard = () => {
   };
   const [editingPoints, setEditingPoints] = useState({});
   const [pointsInputs, setPointsInputs] = useState({});
-  const [zoomLevel, setZoomLevel] = useState(1);
-  const treeContainerRef = useRef(null);
 
   useEffect(() => {
     fetchStats();
@@ -500,6 +498,34 @@ const Dashboard = () => {
     } catch (error) {
       console.error('Failed to fetch team tree:', error);
       setTeamTree(null); // Set default null
+    }
+  };
+
+  // Update points inside teamTree immediately after a successful save
+  const updateTreePoints = (node, targetId, newPoints) => {
+    if (!node) return node;
+    const updated = { ...node };
+    if (updated.id === targetId) {
+      updated.points = newPoints;
+    }
+    if (Array.isArray(updated.children) && updated.children.length) {
+      updated.children = updated.children.map((child) => updateTreePoints(child, targetId, newPoints));
+    }
+    return updated;
+  };
+
+  const handleSavePointsInTree = async (userId, newPoints) => {
+    try {
+      await axios.put(`${API}/user/${userId}/points`, { points: newPoints });
+      // optimistic update: reflect immediately in tree and myTeam
+      setTeamTree((prev) => (prev ? updateTreePoints(prev, userId, newPoints) : prev));
+      setMyTeam((prev) => prev.map((m) => (m.id === userId ? { ...m, points: newPoints } : m)));
+      toast.success('Points updated successfully');
+      return true;
+    } catch (error) {
+      const errorMessage = error.response?.data?.detail || error.message || 'Failed to update points';
+      toast.error(typeof errorMessage === 'string' ? errorMessage : 'Failed to update points');
+      return false;
     }
   };
 
@@ -542,58 +568,6 @@ const Dashboard = () => {
     setEditingPoints({ ...editingPoints, [memberId]: false });
     setPointsInputs({ ...pointsInputs, [memberId]: originalPoints || 0 });
   };
-
-  const handleZoomIn = () => {
-    setZoomLevel(prev => Math.min(prev + 0.1, 2.5));
-  };
-
-  const handleZoomOut = () => {
-    setZoomLevel(prev => Math.max(prev - 0.1, 0.5));
-  };
-
-  const handleZoomReset = () => {
-    setZoomLevel(1);
-  };
-
-  // Button-only zoom: no wheel/pinch handlers
-
-  // Scroll to center the current user in team hierarchy
-  const scrollToCenter = () => {
-    const treeContainer = document.querySelector('[data-testid="team-tree"]');
-    if (treeContainer) {
-      // Wait for the DOM to update, then scroll to center
-      setTimeout(() => {
-        const scrollWidth = treeContainer.scrollWidth;
-        const clientWidth = treeContainer.clientWidth;
-        
-        // If content is wider than container, center it
-        if (scrollWidth > clientWidth) {
-          // Calculate center position to show the root node (current user) in the center
-          const scrollLeft = (scrollWidth - clientWidth) / 2;
-          treeContainer.scrollLeft = scrollLeft;
-        }
-      }, 100);
-    }
-  };
-
-  // Effect to scroll to center when team tree changes or tab switches
-  useEffect(() => {
-    if (teamTree && activeTab === 'tree') {
-      scrollToCenter();
-    }
-  }, [teamTree, activeTab]);
-
-  // Also scroll to center when window resizes
-  useEffect(() => {
-    const handleResize = () => {
-      if (teamTree && activeTab === 'tree') {
-        scrollToCenter();
-      }
-    };
-
-    window.addEventListener('resize', handleResize);
-    return () => window.removeEventListener('resize', handleResize);
-  }, [teamTree, activeTab]);
 
   const handleInvite = async () => {
     setIsLoading(true);
@@ -651,157 +625,6 @@ ${user?.name || 'Team Leader'}`;
       node.children.forEach(child => getAllLevels(child, levels));
     }
     return levels;
-  };
-
-  const renderTreeNode = (node, isRoot = false, level = 0) => {
-    if (!node) return null;
-
-    // Calculate spacing based on level to prevent overlap
-    const spacingClass = level === 0 ? 'space-x-16' : level === 1 ? 'space-x-12' : 'space-x-8';
-    const isOwner = user?.is_owner;
-    const canEdit = isOwner && !isRoot; // Owner can edit all except root (themselves)
-    const hasChildren = node.children && node.children.length > 0;
-
-    return (
-      <div className="flex flex-col items-center relative" key={node.id}>
-        {/* Node Card */}
-        <div className={`relative ${isRoot ? 'bg-gradient-to-r from-blue-500 to-purple-500 text-white' : 'bg-white border-2 border-gray-200'} rounded-lg p-3 shadow-lg w-[180px] sm:w-[220px]`}>
-          {/* Header with delete button (owner only, not for root) */}
-          <div className="flex items-start justify-between mb-1">
-            <div className="flex items-center justify-center flex-1">
-              <div className={`w-3 h-3 ${isRoot ? 'bg-white' : 'bg-blue-500'} rounded-full mr-2`}></div>
-              <span className={`font-semibold text-[11px] sm:text-xs ${isRoot ? 'text-white' : 'text-gray-900'} truncate flex-1 max-w-[120px] sm:max-w-[160px]`} title={node.name}>{formatDisplayName(node.name, 16)}</span>
-            </div>
-            {canEdit && (
-              <AlertDialog>
-                <AlertDialogTrigger asChild>
-                  <button
-                    className={`ml-1 ${isRoot ? 'text-white hover:text-red-200' : 'text-red-500 hover:text-red-700'} p-0.5 rounded transition-colors flex-shrink-0`}
-                    title="Delete member"
-                    onClick={(e) => e.stopPropagation()}
-                  >
-                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                    </svg>
-                  </button>
-                </AlertDialogTrigger>
-                <AlertDialogContent>
-                  <AlertDialogHeader>
-                    <AlertDialogTitle>Delete Member</AlertDialogTitle>
-                    <AlertDialogDescription>
-                      Are you sure you want to delete <strong>{node.name}</strong>? This action will permanently delete this member and all their descendants from the team. This action cannot be undone.
-                    </AlertDialogDescription>
-                  </AlertDialogHeader>
-                  <AlertDialogFooter>
-                    <AlertDialogCancel>Cancel</AlertDialogCancel>
-                    <AlertDialogAction
-                      onClick={() => handleDeleteMember(node.id, node.name)}
-                      className="bg-red-600 hover:bg-red-700"
-                    >
-                      Delete
-                    </AlertDialogAction>
-                  </AlertDialogFooter>
-                </AlertDialogContent>
-              </AlertDialog>
-            )}
-          </div>
-          
-          <div className="text-center">
-            <div className={`text-[11px] sm:text-xs ${isRoot ? 'opacity-90' : 'text-gray-600'} truncate mb-1`}>{node.phone}</div>
-            <Badge variant={isRoot ? "secondary" : "outline"} className="mt-1 text-[10px] sm:text-xs px-2 py-0">
-              L{node.level}
-            </Badge>
-            <div className={`text-[11px] sm:text-xs mt-1 ${isRoot ? 'opacity-80' : 'text-gray-500'}`}>
-              {node.children_count} members
-            </div>
-            
-            {/* Points Section */}
-            <div className={`mt-2 pt-2 border-t ${isRoot ? 'border-white/30' : 'border-gray-200'} flex items-center justify-between`}>
-              <div className={`flex items-center text-[10px] sm:text-xs ${isRoot ? 'text-white/90' : 'text-gray-600'}`}>
-                <span className="mr-1">⭐</span>
-                <span>Points:</span>
-              </div>
-              {canEdit && editingPoints[node.id] ? (
-                <div className="flex items-center gap-1">
-                  <Input
-                    type="number"
-                    min="0"
-                    value={pointsInputs[node.id] !== undefined ? pointsInputs[node.id] : (node.points || 0)}
-                    onChange={(e) => setPointsInputs({ ...pointsInputs, [node.id]: parseInt(e.target.value) || 0 })}
-                    className="w-14 h-6 text-[10px] px-1"
-                    autoFocus
-                    onClick={(e) => e.stopPropagation()}
-                  />
-                  <Button
-                    size="sm"
-                    className="h-6 px-1.5 text-[10px] bg-green-600 hover:bg-green-700"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      handlePointsSave(node.id);
-                    }}
-                  >
-                    ✓
-                  </Button>
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    className="h-6 px-1.5 text-[10px]"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      handlePointsCancel(node.id, node.points);
-                    }}
-                  >
-                    ✕
-                  </Button>
-                </div>
-              ) : (
-                <div className="flex items-center gap-1">
-                  <span className={`font-semibold text-[11px] sm:text-xs ${isRoot ? 'text-white' : 'text-blue-600'}`}>{node.points || 0}</span>
-                  {canEdit && (
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handlePointsEdit(node.id, node.points);
-                      }}
-                      className={`p-0.5 ${isRoot ? 'text-white/80 hover:text-white' : 'text-blue-500 hover:text-blue-700'}`}
-                      title="Edit points"
-                    >
-                      <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                      </svg>
-                    </button>
-                  )}
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
-
-        {/* Children Container */}
-        {hasChildren && (
-          <div className="mt-6 relative">
-            {/* Vertical line from parent to children level */}
-            <div className="absolute left-1/2 transform -translate-x-1/2 w-px h-6 bg-gray-300 top-[-24px]"></div>
-            
-            {/* Children row */}
-            <div className={`flex items-start ${spacingClass}`}>
-              {node.children.map((child, index) => (
-                <div key={child.id} className="flex flex-col items-center relative">
-                  {/* Horizontal line to child */}
-                  <div className="absolute top-[-24px] left-1/2 transform -translate-x-1/2 w-full h-px bg-gray-300"></div>
-                  
-                  {/* Vertical line from horizontal to child */}
-                  <div className="absolute top-[-24px] left-1/2 transform -translate-x-1/2 w-px h-6 bg-gray-300"></div>
-                  
-                  {/* Child Node */}
-                  {renderTreeNode(child, false, level + 1)}
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-      </div>
-    );
   };
 
   return (
@@ -1166,44 +989,9 @@ ${user?.name || 'Team Leader'}`;
                       <CardDescription className="text-gray-600">
                         <span className="text-sm sm:text-base">Visual representation of your entire team structure</span>
                         {teamTree && (
-                          <div className="mt-2 flex items-center justify-between gap-2">
-                            <span className="text-xs sm:text-sm font-medium text-blue-700">
-                              📊 {stats?.total_downline || 0} total members across {Math.max(...getAllLevels(teamTree)) + 1} levels
-                            </span>
-                            {/* Inline zoom controls (always visible, compact on mobile) */}
-                            <div className="flex items-center gap-1 bg-white/80 rounded-md px-1.5 py-1 shadow-sm border border-gray-200">
-                              <button
-                                onClick={handleZoomOut}
-                                className={`p-1 rounded ${zoomLevel <= 0.5 ? 'opacity-50 cursor-not-allowed' : 'hover:bg-gray-100 active:bg-gray-200'}`}
-                                title="Zoom Out"
-                                disabled={zoomLevel <= 0.5}
-                              >
-                                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 sm:h-5 sm:w-5 text-gray-700" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0zM13 10H7" />
-                                </svg>
-                              </button>
-                              <span className="text-[10px] sm:text-xs font-medium text-gray-700 min-w-[2.5rem] text-center">
-                                {Math.round(zoomLevel * 100)}%
-                              </span>
-                              <button
-                                onClick={handleZoomIn}
-                                className={`p-1 rounded ${zoomLevel >= 2.5 ? 'opacity-50 cursor-not-allowed' : 'hover:bg-gray-100 active:bg-gray-200'}`}
-                                title="Zoom In"
-                                disabled={zoomLevel >= 2.5}
-                              >
-                                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 sm:h-5 sm:w-5 text-gray-700" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0zM10 7v6m3-3H7" />
-                                </svg>
-                              </button>
-                              <button
-                                onClick={handleZoomReset}
-                                className="hidden sm:inline-flex p-1 rounded hover:bg-gray-100 active:bg-gray-200 text-xs font-medium text-gray-700"
-                                title="Reset Zoom"
-                              >
-                                Reset
-                              </button>
-                            </div>
-                          </div>
+                          <span className="block mt-2 text-xs sm:text-sm font-medium text-blue-700">
+                            📊 {stats?.total_downline || 0} total members across {Math.max(...getAllLevels(teamTree)) + 1} levels
+                          </span>
                         )}
                       </CardDescription>
                     </div>
@@ -1211,31 +999,18 @@ ${user?.name || 'Team Leader'}`;
                 </CardHeader>
                 <CardContent className="p-0">
                   {teamTree ? (
-                    <div 
-                      ref={treeContainerRef}
-                      className="overflow-x-auto overflow-y-auto max-h-[65vh] sm:max-h-[600px] py-6 sm:py-8 scrollbar-thin scrollbar-thumb-gray-300 scrollbar-track-gray-100" 
-                      data-testid="team-tree" 
-                      style={{ scrollbarWidth: 'thin', scrollbarColor: '#d1d5db #f3f4f6' }}
-                    >
-                      <div 
-                        className="flex justify-center min-w-max px-4 sm:px-8 transition-transform duration-200 origin-center"
-                        style={{ 
-                          transform: `scale(${zoomLevel})`,
-                          transformOrigin: 'center center',
-                          minWidth: `${Math.max(100, Math.round(zoomLevel * 100))}%`
-                        }}
-                      >
-                        {renderTreeNode(teamTree, true)}
-                      </div>
-                      <div className="mt-4 sm:mt-6 text-center text-xs sm:text-sm text-gray-500 bg-gray-50 py-2.5 sm:py-3 mx-4 sm:mx-6 rounded-lg">
-                        💡 Scroll horizontally to view the complete team tree.
-                      </div>
+                    <div className="py-4 sm:py-6" data-testid="team-tree">
+                      <TreeGraph
+                        data={teamTree}
+                        isOwner={user?.is_owner}
+                        onDeleteUser={handleDeleteMember}
+                        onSavePoints={handleSavePointsInTree}
+                        formatDisplayName={formatDisplayName}
+                      />
                     </div>
                   ) : (
                     <div className="text-center py-12">
-                      <div className="w-14 h-14 sm:w-16 sm:h-16 mx-auto bg-gray-200 rounded-full flex items-center justify-center mb-4">
-                        <span className="text-xl sm:text-2xl">🌳</span>
-                      </div>
+                      <div className="w-14 h-14 sm:w-16 sm:h-16 mx-auto bg-gray-200 rounded-full flex items-center justify-center mb-4"><span className="text-xl sm:text-2xl">🌳</span></div>
                       <p className="text-gray-500 text-base sm:text-lg">Loading team hierarchy...</p>
                     </div>
                   )}
