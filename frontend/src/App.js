@@ -1221,7 +1221,8 @@ ${user?.name || 'Team Leader'}`;
                         className="flex justify-center min-w-max px-4 sm:px-8 transition-transform duration-200 origin-center"
                         style={{ 
                           transform: `scale(${zoomLevel})`,
-                          transformOrigin: 'center center'
+                          transformOrigin: 'center center',
+                          minWidth: `${Math.max(100, Math.round(zoomLevel * 100))}%`
                         }}
                       >
                         {renderTreeNode(teamTree, true)}
