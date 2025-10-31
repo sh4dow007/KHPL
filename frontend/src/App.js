@@ -450,12 +450,22 @@ const Dashboard = () => {
   const [activeTab, setActiveTab] = useState('tree');
   const [showWhatsAppShare, setShowWhatsAppShare] = useState(false);
   const [inviteMessage, setInviteMessage] = useState('');
+  
+  // Helper to truncate long names with an end ellipsis (keep beginning)
+  const formatDisplayName = (name, maxChars = 18) => {
+    if (!name) return '';
+    const trimmed = String(name).trim();
+    if (trimmed.length <= maxChars) return trimmed;
+    // Aim to cut at a word boundary near maxChars
+    const slice = trimmed.slice(0, maxChars);
+    const lastSpace = slice.lastIndexOf(' ');
+    const base = lastSpace > 8 ? slice.slice(0, lastSpace) : slice; // avoid cutting too short
+    return `${base}…`;
+  };
   const [editingPoints, setEditingPoints] = useState({});
   const [pointsInputs, setPointsInputs] = useState({});
   const [zoomLevel, setZoomLevel] = useState(1);
   const treeContainerRef = useRef(null);
-  const touchStartDistanceRef = useRef(null);
-  const touchStartZoomRef = useRef(1);
 
   useEffect(() => {
     fetchStats();
@@ -545,70 +555,7 @@ const Dashboard = () => {
     setZoomLevel(1);
   };
 
-  // Calculate distance between two touch points
-  const getTouchDistance = (touch1, touch2) => {
-    const dx = touch2.clientX - touch1.clientX;
-    const dy = touch2.clientY - touch1.clientY;
-    return Math.sqrt(dx * dx + dy * dy);
-  };
-
-  // Mouse wheel zoom support (desktop)
-  useEffect(() => {
-    const container = treeContainerRef.current;
-    if (!container || activeTab !== 'tree') return;
-
-    const handleWheel = (e) => {
-      if (e.ctrlKey || e.metaKey) {
-        e.preventDefault();
-        const delta = e.deltaY > 0 ? -0.1 : 0.1;
-        setZoomLevel(prev => Math.max(0.5, Math.min(2.5, prev + delta)));
-      }
-    };
-
-    container.addEventListener('wheel', handleWheel, { passive: false });
-    return () => container.removeEventListener('wheel', handleWheel);
-  }, [activeTab]);
-
-  // Pinch-to-zoom support (mobile)
-  useEffect(() => {
-    const container = treeContainerRef.current;
-    if (!container || activeTab !== 'tree') return;
-
-    const handleTouchStart = (e) => {
-      if (e.touches.length === 2) {
-        e.preventDefault();
-        const distance = getTouchDistance(e.touches[0], e.touches[1]);
-        touchStartDistanceRef.current = distance;
-        touchStartZoomRef.current = zoomLevel;
-      }
-    };
-
-    const handleTouchMove = (e) => {
-      if (e.touches.length === 2 && touchStartDistanceRef.current !== null) {
-        e.preventDefault();
-        const currentDistance = getTouchDistance(e.touches[0], e.touches[1]);
-        const scale = currentDistance / touchStartDistanceRef.current;
-        const newZoom = touchStartZoomRef.current * scale;
-        setZoomLevel(Math.max(0.5, Math.min(2.5, newZoom)));
-      }
-    };
-
-    const handleTouchEnd = (e) => {
-      if (e.touches.length < 2) {
-        touchStartDistanceRef.current = null;
-      }
-    };
-
-    container.addEventListener('touchstart', handleTouchStart, { passive: false });
-    container.addEventListener('touchmove', handleTouchMove, { passive: false });
-    container.addEventListener('touchend', handleTouchEnd, { passive: false });
-
-    return () => {
-      container.removeEventListener('touchstart', handleTouchStart);
-      container.removeEventListener('touchmove', handleTouchMove);
-      container.removeEventListener('touchend', handleTouchEnd);
-    };
-  }, [activeTab, zoomLevel]);
+  // Button-only zoom: no wheel/pinch handlers
 
   // Scroll to center the current user in team hierarchy
   const scrollToCenter = () => {
@@ -723,7 +670,7 @@ ${user?.name || 'Team Leader'}`;
           <div className="flex items-start justify-between mb-1">
             <div className="flex items-center justify-center flex-1">
               <div className={`w-3 h-3 ${isRoot ? 'bg-white' : 'bg-blue-500'} rounded-full mr-2`}></div>
-              <span className={`font-semibold text-[11px] sm:text-xs ${isRoot ? 'text-white' : 'text-gray-900'} truncate flex-1`}>{node.name}</span>
+              <span className={`font-semibold text-[11px] sm:text-xs ${isRoot ? 'text-white' : 'text-gray-900'} truncate flex-1 max-w-[120px] sm:max-w-[160px]`} title={node.name}>{formatDisplayName(node.name, 16)}</span>
             </div>
             {canEdit && (
               <AlertDialog>
@@ -1073,7 +1020,7 @@ ${user?.name || 'Team Leader'}`;
                       <CardHeader className="pb-3">
                         <div className="flex justify-between items-start">
                           <div className="flex-1">
-                            <CardTitle className="text-lg font-semibold text-gray-900">{member.name}</CardTitle>
+                            <CardTitle className="text-lg font-semibold text-gray-900" title={member.name}>{formatDisplayName(member.name, 18)}</CardTitle>
                             <CardDescription className="text-gray-600">{member.phone}</CardDescription>
                           </div>
                           <div className="flex items-center gap-2">
@@ -1219,45 +1166,46 @@ ${user?.name || 'Team Leader'}`;
                       <CardDescription className="text-gray-600">
                         <span className="text-sm sm:text-base">Visual representation of your entire team structure</span>
                         {teamTree && (
-                          <span className="block mt-2 text-xs sm:text-sm font-medium text-blue-700">
-                            📊 {stats?.total_downline || 0} total members across {Math.max(...getAllLevels(teamTree)) + 1} levels
-                          </span>
+                          <div className="mt-2 flex items-center justify-between gap-2">
+                            <span className="text-xs sm:text-sm font-medium text-blue-700">
+                              📊 {stats?.total_downline || 0} total members across {Math.max(...getAllLevels(teamTree)) + 1} levels
+                            </span>
+                            {/* Inline zoom controls (always visible, compact on mobile) */}
+                            <div className="flex items-center gap-1 bg-white/80 rounded-md px-1.5 py-1 shadow-sm border border-gray-200">
+                              <button
+                                onClick={handleZoomOut}
+                                className={`p-1 rounded ${zoomLevel <= 0.5 ? 'opacity-50 cursor-not-allowed' : 'hover:bg-gray-100 active:bg-gray-200'}`}
+                                title="Zoom Out"
+                                disabled={zoomLevel <= 0.5}
+                              >
+                                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 sm:h-5 sm:w-5 text-gray-700" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0zM13 10H7" />
+                                </svg>
+                              </button>
+                              <span className="text-[10px] sm:text-xs font-medium text-gray-700 min-w-[2.5rem] text-center">
+                                {Math.round(zoomLevel * 100)}%
+                              </span>
+                              <button
+                                onClick={handleZoomIn}
+                                className={`p-1 rounded ${zoomLevel >= 2.5 ? 'opacity-50 cursor-not-allowed' : 'hover:bg-gray-100 active:bg-gray-200'}`}
+                                title="Zoom In"
+                                disabled={zoomLevel >= 2.5}
+                              >
+                                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 sm:h-5 sm:w-5 text-gray-700" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0zM10 7v6m3-3H7" />
+                                </svg>
+                              </button>
+                              <button
+                                onClick={handleZoomReset}
+                                className="hidden sm:inline-flex p-1 rounded hover:bg-gray-100 active:bg-gray-200 text-xs font-medium text-gray-700"
+                                title="Reset Zoom"
+                              >
+                                Reset
+                              </button>
+                            </div>
+                          </div>
                         )}
                       </CardDescription>
-                    </div>
-                    {/* Zoom Controls (desktop/tablet only; hidden on mobile where pinch zoom works) */}
-                    <div className="hidden sm:flex items-center gap-1 sm:gap-2 bg-white/80 rounded-lg px-1.5 sm:px-3 py-1 sm:py-2 shadow-sm border border-gray-200 flex-shrink-0">
-                      <button
-                        onClick={handleZoomOut}
-                        className={`p-1 sm:p-1.5 rounded transition-colors ${zoomLevel <= 0.5 ? 'opacity-50 cursor-not-allowed' : 'hover:bg-gray-100 active:bg-gray-200'}`}
-                        title="Zoom Out"
-                        disabled={zoomLevel <= 0.5}
-                      >
-                        <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 sm:h-5 sm:w-5 text-gray-700" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0zM13 10H7" />
-                        </svg>
-                      </button>
-                      <span className="text-xs sm:text-sm font-medium text-gray-700 min-w-[2.5rem] sm:min-w-[3rem] text-center">
-                        {Math.round(zoomLevel * 100)}%
-                      </span>
-                      <button
-                        onClick={handleZoomIn}
-                        className={`p-1 sm:p-1.5 rounded transition-colors ${zoomLevel >= 2.5 ? 'opacity-50 cursor-not-allowed' : 'hover:bg-gray-100 active:bg-gray-200'}`}
-                        title="Zoom In"
-                        disabled={zoomLevel >= 2.5}
-                      >
-                        <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 sm:h-5 sm:w-5 text-gray-700" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0zM10 7v6m3-3H7" />
-                        </svg>
-                      </button>
-                      <div className="h-5 w-px bg-gray-300 mx-1 hidden sm:block"></div>
-                      <button
-                        onClick={handleZoomReset}
-                        className="p-1 sm:p-1.5 rounded hover:bg-gray-100 active:bg-gray-200 transition-colors text-xs font-medium text-gray-700 hidden sm:block"
-                        title="Reset Zoom"
-                      >
-                        Reset
-                      </button>
                     </div>
                   </div>
                 </CardHeader>
@@ -1279,7 +1227,7 @@ ${user?.name || 'Team Leader'}`;
                         {renderTreeNode(teamTree, true)}
                       </div>
                       <div className="mt-4 sm:mt-6 text-center text-xs sm:text-sm text-gray-500 bg-gray-50 py-2.5 sm:py-3 mx-4 sm:mx-6 rounded-lg">
-                        💡 Scroll horizontally to view the complete team tree • <span className="hidden sm:inline">Use Ctrl/Cmd + Mouse Wheel to zoom</span><span className="sm:hidden">Pinch to zoom on mobile</span>
+                        💡 Scroll horizontally to view the complete team tree.
                       </div>
                     </div>
                   ) : (
