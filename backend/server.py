@@ -133,6 +133,7 @@ class UserResponse(BaseModel):
     is_owner: bool
     created_at: datetime
     children_count: int = 0
+    points: int = 0
 
 class Invitation(BaseModel):
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
@@ -176,6 +177,9 @@ class Token(BaseModel):
 class ChangePasswordRequest(BaseModel):
     current_password: str
     new_password: str
+
+class UpdatePointsRequest(BaseModel):
+    points: int = Field(ge=0, description="Points must be a non-negative integer")
 
 # Utility functions
 def verify_password(plain_password: str, hashed_password: str) -> bool:
@@ -229,6 +233,10 @@ async def prepare_user_response(user_doc: dict) -> UserResponse:
     # Remove the old children_count from user_doc to avoid conflict
     user_data = {k: v for k, v in user_doc.items() if k != "children_count"}
     
+    # Ensure points field exists (default to 0 if not present)
+    if "points" not in user_data:
+        user_data["points"] = 0
+    
     return UserResponse(
         **user_data,
         children_count=current_children_count
@@ -252,7 +260,8 @@ async def initialize_owner():
             "id_proof_url": None,
             "is_owner": True,
             "created_at": datetime.now(timezone.utc),
-            "invited_by": None
+            "invited_by": None,
+            "points": 0
         }
         await db.users.insert_one(owner_data)
         print(f"Default owner created: {owner_data['email']} | Phone: {owner_data['phone']}")
@@ -480,7 +489,8 @@ async def register_from_invitation(registration_data: RegisterFromInvitation):
         "id_proof_url": None,
         "is_owner": False,
         "created_at": datetime.now(timezone.utc),
-        "invited_by": invitation["invited_by"]
+        "invited_by": invitation["invited_by"],
+        "points": 0
     }
     
     await db.users.insert_one(new_user)
@@ -554,6 +564,7 @@ async def get_team_tree(current_user: dict = Depends(get_current_user)):
             "phone": user["phone"],
             "level": user["level"],
             "children_count": len(children),
+            "points": user.get("points", 0),
             "children": []
         }
         
@@ -659,6 +670,37 @@ async def change_password(request: ChangePasswordRequest, current_user: dict = D
     )
     
     return {"message": "Password changed successfully"}
+
+@api_router.put("/user/{user_id}/points")
+async def update_user_points(user_id: str, request: UpdatePointsRequest, current_user: dict = Depends(get_current_user)):
+    """Update points for a user. Only owner can update points."""
+    
+    # Only owner can update points
+    if not current_user.get("is_owner", False):
+        raise HTTPException(
+            status_code=403,
+            detail="Only the owner can update points"
+        )
+    
+    # Check if user exists
+    user_to_update = await db.users.find_one({"id": user_id})
+    if not user_to_update:
+        raise HTTPException(
+            status_code=404,
+            detail="User not found"
+        )
+    
+    # Update points
+    await db.users.update_one(
+        {"id": user_id},
+        {"$set": {"points": request.points}}
+    )
+    
+    # Return updated user
+    updated_user = await db.users.find_one({"id": user_id})
+    user_response = await prepare_user_response(updated_user)
+    
+    return {"message": "Points updated successfully", "user": user_response}
 
 # Include the router in the main app
 app.include_router(api_router)
